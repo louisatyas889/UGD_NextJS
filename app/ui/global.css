@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 2, 6, 23; /* Warna #020617 */
+  --background-end-rgb: 3, 7, 18;   /* Warna #030712 */
+}
+
+@layer base {
+  body {
+    @apply bg-[#020617] text-white antialiased;
+    font-family: var(--font-inter), ui-sans-serif, system-ui;
+  }
+
+  h1, h2, h3, h4, .font-space {
+    font-family: var(--font-space), ui-sans-serif, system-ui;
+  }
+}
+
+/* Scrollbar Custom agar terlihat lebih futuristik */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #020617;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e1b4b;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3730a3;
+}
