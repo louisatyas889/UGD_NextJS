@@ -1,13 +1,11 @@
-import postgres from 'postgres';
-import { formatCurrency } from './utils';
-
-// Menggunakan POSTGRES_URL sesuai koneksi file .env kamu
-const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
+import { getSql } from './db';
 
 // =========================================================================
 // 1. FETCH DATA GRAFIK (revenue)
 // =========================================================================
 export async function fetchRevenue() {
+  const sql = getSql();
+
   try {
     const data = await sql`SELECT * FROM revenue`;
     return data;
@@ -21,6 +19,8 @@ export async function fetchRevenue() {
 // 2. FETCH LATEST ALERTS (Membaca tabel fleet_alerts - AMAN, SUDAH ADA DI NEON)
 // =========================================================================
 export async function fetchLatestInvoices() {
+  const sql = getSql();
+
   try {
     // Mengambil data notifikasi cuaca/mesin dari tabel fleet_alerts (Sesuai image_fda77f.png)
     const data = await sql`
@@ -48,6 +48,8 @@ export async function fetchLatestInvoices() {
 // 3. FETCH COUNTER CARD (Menghitung total baris armada)
 // =========================================================================
 export async function fetchCardData() {
+  const sql = getSql();
+
   try {
     const vesselCountPromise = sql`SELECT COUNT(*) FROM fleet_vessels`;
     const personnelCountPromise = sql`SELECT COUNT(*) FROM fleet_personnel`;
@@ -84,21 +86,24 @@ export async function fetchFilteredInvoices(
   query: string,
   currentPage: number,
 ) {
+  const sql = getSql();
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
   try {
-    // HANYA mengambil kolom yang terbukti ada di Neon Console kamu: id, name, work_shift, job_title
     const personnel = await sql`
       SELECT
         id,
         name,
         work_shift,
-        job_title
+        job_title,
+        working_hours,
+        assigned_vessel
       FROM fleet_personnel
       WHERE
         name ILIKE ${`%${query}%`} OR
         job_title ILIKE ${`%${query}%`} OR
-        work_shift ILIKE ${`%${query}%`}
+        work_shift ILIKE ${`%${query}%`} OR
+        assigned_vessel ILIKE ${`%${query}%`}
       ORDER BY id ASC
       LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
     `;
@@ -106,10 +111,12 @@ export async function fetchFilteredInvoices(
     return personnel.map((p) => ({
       id: p.id,
       name: p.name,
-      email: p.job_title,          // Jabatan masuk ke kolom email
-      amount: 'Hadir',             // Karena working_hours tidak ada, kita hardcode status kehadirannya
-      date: 'Serena Sail',         // Hardcode nama armada sementara
-      status: p.work_shift,        // Shift (Day/Night) masuk ke badge status
+      email: p.job_title,
+      amount: 0,
+      date: new Date().toISOString().slice(0, 10),
+      status: p.work_shift === 'NIGHT' ? 'pending' : 'paid',
+      assignedVessel: p.assigned_vessel,
+      workingHours: p.working_hours,
       image_url: '/customers/balazs-orban.png',
     }));
   } catch (error) {
@@ -122,13 +129,17 @@ export async function fetchFilteredInvoices(
 // 5. FETCH TOTAL HALAMAN PAGINATION TABEL PERSONEL
 // =========================================================================
 export async function fetchInvoicesPages(query: string) {
+  const sql = getSql();
+
   try {
     const data = await sql`
       SELECT COUNT(*)
       FROM fleet_personnel
       WHERE
         name ILIKE ${`%${query}%`} OR
-        job_title ILIKE ${`%${query}%`}
+        job_title ILIKE ${`%${query}%`} OR
+        work_shift ILIKE ${`%${query}%`} OR
+        assigned_vessel ILIKE ${`%${query}%`}
     `;
 
     const totalPages = Math.ceil(Number(data[0].count) / ITEMS_PER_PAGE);
@@ -143,6 +154,8 @@ export async function fetchInvoicesPages(query: string) {
 // 6. FETCH DETAIL KRU BY ID
 // =========================================================================
 export async function fetchInvoiceById(id: string) {
+  const sql = getSql();
+
   try {
     const data = await sql`
       SELECT id, name, work_shift, job_title
@@ -156,8 +169,8 @@ export async function fetchInvoiceById(id: string) {
     return {
       id: p.id,
       customer_id: p.name,
-      amount: 8, // Default jam kerja tiruan agar form tidak error
-      status: p.work_shift,
+      amount: 0,
+      status: p.work_shift === 'NIGHT' ? 'pending' : 'paid',
     };
   } catch (error) {
     console.error('Database Error:', error);
@@ -169,6 +182,8 @@ export async function fetchInvoiceById(id: string) {
 // 7. FETCH KOORDINAT PETA (Membaca tracking_packages - Sesuai image_fdae8d.png)
 // =========================================================================
 export async function fetchCustomers() {
+  const sql = getSql();
+
   try {
     const locations = await sql`
       SELECT
@@ -189,6 +204,8 @@ export async function fetchCustomers() {
 
 // Helper dropdown select
 export async function fetchFilteredCustomers(query: string) {
+  const sql = getSql();
+
   try {
     const vessels = await sql`SELECT id, destination, status FROM fleet_vessels`;
     return vessels.map((v) => ({
