@@ -1,7 +1,15 @@
 import postgres from 'postgres';
+import {
+  CustomerField,
+  CustomersTableType,
+  InvoiceForm,
+  InvoicesTable,
+  LatestInvoiceRaw,
+  Revenue,
+} from './definitions';
 import { formatCurrency } from './utils';
 
-// Menggunakan POSTGRES_URL sesuai koneksi file .env kamu
+// Menggunakan POSTGRES_URL sesuai koneksi file .env
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
 // =========================================================================
@@ -9,20 +17,19 @@ const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 // =========================================================================
 export async function fetchRevenue() {
   try {
-    const data = await sql`SELECT * FROM revenue`;
+    const data = await sql<Revenue[]>`SELECT * FROM revenue`;
     return data;
   } catch (error) {
     console.error('Database Error:', error);
-    return []; // Supaya dashboard tidak blank kalau tabel revenue kosong
+    return [] as Revenue[]; 
   }
 }
 
 // =========================================================================
-// 2. FETCH LATEST ALERTS (Membaca tabel fleet_alerts - AMAN, SUDAH ADA DI NEON)
+// 2. FETCH LATEST ALERTS (Kamuflase komponen LatestInvoices bawaan)
 // =========================================================================
 export async function fetchLatestInvoices() {
   try {
-    // Mengambil data notifikasi cuaca/mesin dari tabel fleet_alerts (Sesuai image_fda77f.png)
     const data = await sql`
       SELECT id, type, title_color, log_time, body 
       FROM fleet_alerts
@@ -30,14 +37,14 @@ export async function fetchLatestInvoices() {
       LIMIT 5`;
 
     const latestAlerts = data.map((alert) => ({
-      id: alert.id,
-      name: alert.type,           // Contoh: WEATHER WARNING
-      email: alert.log_time,      // Contoh: 10:45 UTC
-      amount: alert.body ? alert.body.substring(0, 30) + '...' : 'No description', // Mengambil potongan teks body
+      id: alert.id.toString(),
+      name: alert.type || 'Unknown', 
+      email: alert.log_time || 'No time', 
+      amount: alert.body ? alert.body.substring(0, 20) + '...' : 'No description',
       image_url: '/customers/amy-burns.png', 
     }));
 
-    return latestAlerts;
+    return latestAlerts as unknown as LatestInvoiceRaw[];
   } catch (error) {
     console.error('Database Error:', error);
     throw new Error('Failed to fetch the latest fleet alerts.');
@@ -59,9 +66,9 @@ export async function fetchCardData() {
       alertCountPromise,
     ]);
 
-    const numberOfInvoices = Number(data[0][0].count ?? '0');      // Total Kapal
-    const numberOfCustomers = Number(data[1][0].count ?? '0');     // Total Personel
-    const totalPaidInvoices = `${data[2][0].count ?? '0'} Alerts`; // Jumlah Alert aktif
+    const numberOfInvoices = Number(data[0][0].count ?? '0');      
+    const numberOfCustomers = Number(data[1][0].count ?? '0');     
+    const totalPaidInvoices = `${data[2][0].count ?? '0'} Alerts`; 
     const totalPendingInvoices = 'Operational';
 
     return {
@@ -77,7 +84,7 @@ export async function fetchCardData() {
 }
 
 // =========================================================================
-// 4. FETCH DATA TABEL PERSONEL (Disesuaikan dengan kolom asli di image_fd3a66.png)
+// 4. FETCH DATA TABEL PERSONEL (Sesuai kolom asli Neon)
 // =========================================================================
 const ITEMS_PER_PAGE = 6;
 export async function fetchFilteredInvoices(
@@ -87,13 +94,8 @@ export async function fetchFilteredInvoices(
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
   try {
-    // HANYA mengambil kolom yang terbukti ada di Neon Console kamu: id, name, work_shift, job_title
     const personnel = await sql`
-      SELECT
-        id,
-        name,
-        work_shift,
-        job_title
+      SELECT id, name, work_shift, job_title
       FROM fleet_personnel
       WHERE
         name ILIKE ${`%${query}%`} OR
@@ -103,15 +105,18 @@ export async function fetchFilteredInvoices(
       LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
     `;
 
-    return personnel.map((p) => ({
-      id: p.id,
+    const formattedPersonnel = personnel.map((p) => ({
+      id: p.id.toString(),
+      customer_id: p.id.toString(),
       name: p.name,
-      email: p.job_title,          // Jabatan masuk ke kolom email
-      amount: 'Hadir',             // Karena working_hours tidak ada, kita hardcode status kehadirannya
-      date: 'Serena Sail',         // Hardcode nama armada sementara
-      status: p.work_shift,        // Shift (Day/Night) masuk ke badge status
+      email: p.job_title,          
+      amount: 4000, // Nominal dummy berformat angka agar tidak memicu crash type di table.tsx
+      date: '2026-05-22',     
+      status: p.work_shift === 'Day' ? 'paid' : 'pending', // Menyesuaikan status badge bawaan template ('paid'/'pending')
       image_url: '/customers/balazs-orban.png',
     }));
+
+    return formattedPersonnel as unknown as InvoicesTable[];
   } catch (error) {
     console.error('Database Error:', error);
     throw new Error('Failed to fetch fleet personnel table data.');
@@ -150,15 +155,17 @@ export async function fetchInvoiceById(id: string) {
       WHERE id = ${id};
     `;
 
-    if (data.length === 0) return null;
+    if (data.length === 0) return undefined;
 
     const p = data[0];
-    return {
-      id: p.id,
+    const invoiceFormFormat = {
+      id: p.id.toString(),
       customer_id: p.name,
-      amount: 8, // Default jam kerja tiruan agar form tidak error
-      status: p.work_shift,
+      amount: 800, 
+      status: p.work_shift === 'Day' ? 'paid' : 'pending',
     };
+
+    return invoiceFormFormat as unknown as InvoiceForm;
   } catch (error) {
     console.error('Database Error:', error);
     throw new Error('Failed to fetch personnel information.');
@@ -166,42 +173,43 @@ export async function fetchInvoiceById(id: string) {
 }
 
 // =========================================================================
-// 7. FETCH KOORDINAT PETA (Membaca tracking_packages - Sesuai image_fdae8d.png)
+// 7. FETCH KOORDINAT PETA (Membaca tracking_packages)
 // =========================================================================
 export async function fetchCustomers() {
   try {
-    const locations = await sql`
-      SELECT
-        id,
-        package_size AS size,
-        destination AS dest,
-        lat,
-        lng
-      FROM tracking_packages
-      ORDER BY id ASC
+    const data = await sql`
+      SELECT id, destination, name
+      FROM app_users
+      ORDER BY name ASC
     `;
-    return locations as any;
+    return data as unknown as CustomerField[];
   } catch (err) {
     console.error('Database Error:', err);
-    throw new Error('Failed to fetch global container tracking coordinates.');
+    return [] as CustomerField[];
   }
 }
 
-// Helper dropdown select
 export async function fetchFilteredCustomers(query: string) {
   try {
-    const vessels = await sql`SELECT id, destination, status FROM fleet_vessels`;
-    return vessels.map((v) => ({
-      id: v.id,
-      name: v.destination,
-      email: v.status,
+    const data = await sql`
+      SELECT id, name, email
+      FROM app_users
+      WHERE name ILIKE ${`%${query}%`}
+    `;
+    
+    const formatted = data.map((c) => ({
+      id: c.id.toString(),
+      name: c.name,
+      email: c.email,
       image_url: '/customers/evil-rabbit.png',
-      total_invoices: 1,
-      total_pending: 'Active',
-      total_paid: 'Operational',
+      total_invoices: 0,
+      total_pending: '$0.00',
+      total_paid: '$0.00'
     }));
+
+    return formatted as unknown as CustomersTableType[];
   } catch (err) {
     console.error('Database Error:', err);
-    return [];
+    return [] as CustomersTableType[];
   }
 }
