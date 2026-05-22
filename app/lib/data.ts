@@ -1,77 +1,68 @@
 import postgres from 'postgres';
-import {
-  CustomerField,
-  CustomersTableType,
-  InvoiceForm,
-  InvoicesTable,
-  LatestInvoiceRaw,
-  Revenue,
-} from './definitions';
 import { formatCurrency } from './utils';
 
+// Menggunakan POSTGRES_URL sesuai koneksi file .env kamu
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
+// =========================================================================
+// 1. FETCH DATA GRAFIK (revenue)
+// =========================================================================
 export async function fetchRevenue() {
   try {
-    // Artificially delay a response for demo purposes.
-    // Don't do this in production :)
-
-    // console.log('Fetching revenue data...');
-    // await new Promise((resolve) => setTimeout(resolve, 3000));
-
-    const data = await sql<Revenue[]>`SELECT * FROM revenue`;
-
-    // console.log('Data fetch completed after 3 seconds.');
-
+    const data = await sql`SELECT * FROM revenue`;
     return data;
   } catch (error) {
     console.error('Database Error:', error);
-    throw new Error('Failed to fetch revenue data.');
+    return []; // Supaya dashboard tidak blank kalau tabel revenue kosong
   }
 }
 
+// =========================================================================
+// 2. FETCH LATEST ALERTS (Membaca tabel fleet_alerts - AMAN, SUDAH ADA DI NEON)
+// =========================================================================
 export async function fetchLatestInvoices() {
   try {
-    const data = await sql<LatestInvoiceRaw[]>`
-      SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
-      ORDER BY invoices.date DESC
+    // Mengambil data notifikasi cuaca/mesin dari tabel fleet_alerts (Sesuai image_fda77f.png)
+    const data = await sql`
+      SELECT id, type, title_color, log_time, body 
+      FROM fleet_alerts
+      ORDER BY id DESC
       LIMIT 5`;
 
-    const latestInvoices = data.map((invoice) => ({
-      ...invoice,
-      amount: formatCurrency(invoice.amount),
+    const latestAlerts = data.map((alert) => ({
+      id: alert.id,
+      name: alert.type,           // Contoh: WEATHER WARNING
+      email: alert.log_time,      // Contoh: 10:45 UTC
+      amount: alert.body ? alert.body.substring(0, 30) + '...' : 'No description', // Mengambil potongan teks body
+      image_url: '/customers/amy-burns.png', 
     }));
-    return latestInvoices;
+
+    return latestAlerts;
   } catch (error) {
     console.error('Database Error:', error);
-    throw new Error('Failed to fetch the latest invoices.');
+    throw new Error('Failed to fetch the latest fleet alerts.');
   }
 }
 
+// =========================================================================
+// 3. FETCH COUNTER CARD (Menghitung total baris armada)
+// =========================================================================
 export async function fetchCardData() {
   try {
-    // You can probably combine these into a single SQL query
-    // However, we are intentionally splitting them to demonstrate
-    // how to initialize multiple queries in parallel with JS.
-    const invoiceCountPromise = sql`SELECT COUNT(*) FROM invoices`;
-    const customerCountPromise = sql`SELECT COUNT(*) FROM customers`;
-    const invoiceStatusPromise = sql`SELECT
-         SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS "paid",
-         SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) AS "pending"
-         FROM invoices`;
+    const vesselCountPromise = sql`SELECT COUNT(*) FROM fleet_vessels`;
+    const personnelCountPromise = sql`SELECT COUNT(*) FROM fleet_personnel`;
+    const alertCountPromise = sql`SELECT COUNT(*) FROM fleet_alerts`;
 
     const data = await Promise.all([
-      invoiceCountPromise,
-      customerCountPromise,
-      invoiceStatusPromise,
+      vesselCountPromise,
+      personnelCountPromise,
+      alertCountPromise,
     ]);
 
-    const numberOfInvoices = Number(data[0][0].count ?? '0');
-    const numberOfCustomers = Number(data[1][0].count ?? '0');
-    const totalPaidInvoices = formatCurrency(data[2][0].paid ?? '0');
-    const totalPendingInvoices = formatCurrency(data[2][0].pending ?? '0');
+    const numberOfInvoices = Number(data[0][0].count ?? '0');      // Total Kapal
+    const numberOfCustomers = Number(data[1][0].count ?? '0');     // Total Personel
+    const totalPaidInvoices = `${data[2][0].count ?? '0'} Alerts`; // Jumlah Alert aktif
+    const totalPendingInvoices = 'Operational';
 
     return {
       numberOfCustomers,
@@ -81,10 +72,13 @@ export async function fetchCardData() {
     };
   } catch (error) {
     console.error('Database Error:', error);
-    throw new Error('Failed to fetch card data.');
+    throw new Error('Failed to fetch fleet card data.');
   }
 }
 
+// =========================================================================
+// 4. FETCH DATA TABEL PERSONEL (Disesuaikan dengan kolom asli di image_fd3a66.png)
+// =========================================================================
 const ITEMS_PER_PAGE = 6;
 export async function fetchFilteredInvoices(
   query: string,
@@ -93,126 +87,121 @@ export async function fetchFilteredInvoices(
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
   try {
-    const invoices = await sql<InvoicesTable[]>`
+    // HANYA mengambil kolom yang terbukti ada di Neon Console kamu: id, name, work_shift, job_title
+    const personnel = await sql`
       SELECT
-        invoices.id,
-        invoices.amount,
-        invoices.date,
-        invoices.status,
-        customers.name,
-        customers.email,
-        customers.image_url
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
+        id,
+        name,
+        work_shift,
+        job_title
+      FROM fleet_personnel
       WHERE
-        customers.name ILIKE ${`%${query}%`} OR
-        customers.email ILIKE ${`%${query}%`} OR
-        invoices.amount::text ILIKE ${`%${query}%`} OR
-        invoices.date::text ILIKE ${`%${query}%`} OR
-        invoices.status ILIKE ${`%${query}%`}
-      ORDER BY invoices.date DESC
+        name ILIKE ${`%${query}%`} OR
+        job_title ILIKE ${`%${query}%`} OR
+        work_shift ILIKE ${`%${query}%`}
+      ORDER BY id ASC
       LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
     `;
 
-    return invoices;
+    return personnel.map((p) => ({
+      id: p.id,
+      name: p.name,
+      email: p.job_title,          // Jabatan masuk ke kolom email
+      amount: 'Hadir',             // Karena working_hours tidak ada, kita hardcode status kehadirannya
+      date: 'Serena Sail',         // Hardcode nama armada sementara
+      status: p.work_shift,        // Shift (Day/Night) masuk ke badge status
+      image_url: '/customers/balazs-orban.png',
+    }));
   } catch (error) {
     console.error('Database Error:', error);
-    throw new Error('Failed to fetch invoices.');
+    throw new Error('Failed to fetch fleet personnel table data.');
   }
 }
 
+// =========================================================================
+// 5. FETCH TOTAL HALAMAN PAGINATION TABEL PERSONEL
+// =========================================================================
 export async function fetchInvoicesPages(query: string) {
   try {
-    const data = await sql`SELECT COUNT(*)
-    FROM invoices
-    JOIN customers ON invoices.customer_id = customers.id
-    WHERE
-      customers.name ILIKE ${`%${query}%`} OR
-      customers.email ILIKE ${`%${query}%`} OR
-      invoices.amount::text ILIKE ${`%${query}%`} OR
-      invoices.date::text ILIKE ${`%${query}%`} OR
-      invoices.status ILIKE ${`%${query}%`}
-  `;
+    const data = await sql`
+      SELECT COUNT(*)
+      FROM fleet_personnel
+      WHERE
+        name ILIKE ${`%${query}%`} OR
+        job_title ILIKE ${`%${query}%`}
+    `;
 
     const totalPages = Math.ceil(Number(data[0].count) / ITEMS_PER_PAGE);
     return totalPages;
   } catch (error) {
     console.error('Database Error:', error);
-    throw new Error('Failed to fetch total number of invoices.');
+    throw new Error('Failed to fetch total number of fleet personnel rows.');
   }
 }
 
+// =========================================================================
+// 6. FETCH DETAIL KRU BY ID
+// =========================================================================
 export async function fetchInvoiceById(id: string) {
   try {
-    const data = await sql<InvoiceForm[]>`
-      SELECT
-        invoices.id,
-        invoices.customer_id,
-        invoices.amount,
-        invoices.status
-      FROM invoices
-      WHERE invoices.id = ${id};
+    const data = await sql`
+      SELECT id, name, work_shift, job_title
+      FROM fleet_personnel
+      WHERE id = ${id};
     `;
 
-    const invoice = data.map((invoice) => ({
-      ...invoice,
-      // Convert amount from cents to dollars
-      amount: invoice.amount / 100,
-    }));
+    if (data.length === 0) return null;
 
-    return invoice[0];
+    const p = data[0];
+    return {
+      id: p.id,
+      customer_id: p.name,
+      amount: 8, // Default jam kerja tiruan agar form tidak error
+      status: p.work_shift,
+    };
   } catch (error) {
     console.error('Database Error:', error);
-    throw new Error('Failed to fetch invoice.');
+    throw new Error('Failed to fetch personnel information.');
   }
 }
 
+// =========================================================================
+// 7. FETCH KOORDINAT PETA (Membaca tracking_packages - Sesuai image_fdae8d.png)
+// =========================================================================
 export async function fetchCustomers() {
   try {
-    const customers = await sql<CustomerField[]>`
+    const locations = await sql`
       SELECT
         id,
-        name
-      FROM customers
-      ORDER BY name ASC
+        package_size AS size,
+        destination AS dest,
+        lat,
+        lng
+      FROM tracking_packages
+      ORDER BY id ASC
     `;
-
-    return customers;
+    return locations as any;
   } catch (err) {
     console.error('Database Error:', err);
-    throw new Error('Failed to fetch all customers.');
+    throw new Error('Failed to fetch global container tracking coordinates.');
   }
 }
 
+// Helper dropdown select
 export async function fetchFilteredCustomers(query: string) {
   try {
-    const data = await sql<CustomersTableType[]>`
-		SELECT
-		  customers.id,
-		  customers.name,
-		  customers.email,
-		  customers.image_url,
-		  COUNT(invoices.id) AS total_invoices,
-		  SUM(CASE WHEN invoices.status = 'pending' THEN invoices.amount ELSE 0 END) AS total_pending,
-		  SUM(CASE WHEN invoices.status = 'paid' THEN invoices.amount ELSE 0 END) AS total_paid
-		FROM customers
-		LEFT JOIN invoices ON customers.id = invoices.customer_id
-		WHERE
-		  customers.name ILIKE ${`%${query}%`} OR
-        customers.email ILIKE ${`%${query}%`}
-		GROUP BY customers.id, customers.name, customers.email, customers.image_url
-		ORDER BY customers.name ASC
-	  `;
-
-    const customers = data.map((customer) => ({
-      ...customer,
-      total_pending: formatCurrency(customer.total_pending),
-      total_paid: formatCurrency(customer.total_paid),
+    const vessels = await sql`SELECT id, destination, status FROM fleet_vessels`;
+    return vessels.map((v) => ({
+      id: v.id,
+      name: v.destination,
+      email: v.status,
+      image_url: '/customers/evil-rabbit.png',
+      total_invoices: 1,
+      total_pending: 'Active',
+      total_paid: 'Operational',
     }));
-
-    return customers;
   } catch (err) {
     console.error('Database Error:', err);
-    throw new Error('Failed to fetch customer table.');
+    return [];
   }
 }
