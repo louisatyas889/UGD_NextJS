@@ -1,17 +1,14 @@
-import postgres from 'postgres';
 import { NextResponse } from 'next/server';
 // Mengambil data dummy dari file placeholder-data Anda
 import { users, dummyAdmins, vessels, alerts, fleetPersonnel, TrakingPackages } from '../lib/placeholder-data';
+import { getSql } from '../lib/db';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  if (!process.env.DATABASE_URL) {
-    return NextResponse.json({ error: 'DATABASE_URL belum diset di file .env!' }, { status: 500 });
-  }
-
-  // Menginisialisasi koneksi Postgres menggunakan connection string dari .env
-  const sql = postgres(process.env.DATABASE_URL, { ssl: 'require' });
-
   try {
+    const sql = getSql();
+
     // 1. Buat dan isi Tabel Users/Admins
     await sql`
       CREATE TABLE IF NOT EXISTS app_users (
@@ -23,7 +20,7 @@ export async function GET() {
         avatar VARCHAR(5) DEFAULT 'U'
       );
     `;
-    
+
     await sql`TRUNCATE TABLE app_users CASCADE;`;
 
     for (const u of users) {
@@ -69,19 +66,51 @@ export async function GET() {
     await sql`
       CREATE TABLE IF NOT EXISTS fleet_personnel (
         id VARCHAR(50) PRIMARY KEY,
-        package_size VARCHAR(20),
-        destination VARCHAR(100),
-        lat DOUBLE PRECISION,
-        lng DOUBLE PRECISION,
-        vessel_name VARCHAR(100)
+        name VARCHAR(100),
+        work_shift VARCHAR(20),
+        job_title VARCHAR(100),
+        start_hour INTEGER,
+        end_hour INTEGER,
+        working_hours VARCHAR(20),
+        assigned_vessel VARCHAR(100)
       );
     `;
-    await sql`TRUNCATE TABLE fleet_personnel CASCADE;`;
+    await sql`
+      ALTER TABLE fleet_personnel
+      ADD COLUMN IF NOT EXISTS name VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS work_shift VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS job_title VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS start_hour INTEGER,
+      ADD COLUMN IF NOT EXISTS end_hour INTEGER,
+      ADD COLUMN IF NOT EXISTS working_hours VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS assigned_vessel VARCHAR(100);
+    `;
 
-    for (const tp of TrakingPackages) {
-      await sql`INSERT INTO tracking_packages (id, package_size, destination, lat, lng, vessel_name) 
-        VALUES (${tp.id}, ${tp.size}, ${tp.dest}, ${tp.lat}, ${tp.lng}, ${tp.vesselName});`;
-}
+    await sql`TRUNCATE TABLE fleet_personnel CASCADE;`;
+    for (const person of fleetPersonnel) {
+      await sql`
+        INSERT INTO fleet_personnel (
+          id,
+          name,
+          work_shift,
+          job_title,
+          start_hour,
+          end_hour,
+          working_hours,
+          assigned_vessel
+        )
+        VALUES (
+          ${person.id},
+          ${person.name},
+          ${person.workShift},
+          ${person.jobTitle},
+          ${person.startHour},
+          ${person.endHour},
+          ${person.workingHours},
+          ${person.assignedVessel}
+        );
+      `;
+    }
 
     // 5. Buat dan isi Tabel Tracking Cargo
     await sql`

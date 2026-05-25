@@ -5,52 +5,10 @@ import { filterItemsByQuery, paginateItems } from "../lib/data-controls";
 import DataPaginationBar from "../ui/data-pagination-bar";
 import DataSearchInput from "../ui/data-search-input";
 
-const vessels = [
-  {
-    id: "PL-992-BUMI",
-    dest: "Singapore Hub",
-    status: "EN ROUTE",
-    st: "enroute",
-    eta: "14:28:00",
-    mon: "chart",
-  },
-  {
-    id: "PL-441-BULAN",
-    dest: "Port of Rotterdam",
-    status: "DELAYED",
-    st: "delayed",
-    eta: "UNKNOWN",
-    mon: "warn",
-  },
-  {
-    id: "PL-770-ORION",
-    dest: "Busan Terminal",
-    status: "IN PORT",
-    st: "inport",
-    eta: "--",
-    mon: "anchor",
-  },
-  {
-    id: "PL-105-MARS",
-    dest: "Dry Dock C",
-    status: "MAINTENANCE",
-    st: "maint",
-    eta: "--",
-    mon: "wrench",
-  },
-];
-
 function MonIcon({ t }: { t: string }) {
   if (t === "chart") {
     return (
-      <svg
-        fill="none"
-        height="16"
-        stroke="#4b5563"
-        strokeWidth="2"
-        viewBox="0 0 24 24"
-        width="16"
-      >
+      <svg fill="none" height="16" stroke="#4b5563" strokeWidth="2" viewBox="0 0 24 24" width="16">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
       </svg>
     );
@@ -58,14 +16,7 @@ function MonIcon({ t }: { t: string }) {
 
   if (t === "anchor") {
     return (
-      <svg
-        fill="none"
-        height="16"
-        stroke="#4b5563"
-        strokeWidth="2"
-        viewBox="0 0 24 24"
-        width="16"
-      >
+      <svg fill="none" height="16" stroke="#4b5563" strokeWidth="2" viewBox="0 0 24 24" width="16">
         <circle cx="12" cy="5" r="3" />
         <line x1="12" x2="12" y1="8" y2="22" />
         <path d="M5 12H2a10 10 0 0 0 20 0h-3" />
@@ -75,14 +26,7 @@ function MonIcon({ t }: { t: string }) {
 
   if (t === "warn") {
     return (
-      <svg
-        fill="none"
-        height="16"
-        stroke="#4b5563"
-        strokeWidth="2"
-        viewBox="0 0 24 24"
-        width="16"
-      >
+      <svg fill="none" height="16" stroke="#4b5563" strokeWidth="2" viewBox="0 0 24 24" width="16">
         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
         <line x1="12" x2="12" y1="9" y2="13" />
         <line x1="12" x2="12.01" y1="17" y2="17" />
@@ -91,20 +35,33 @@ function MonIcon({ t }: { t: string }) {
   }
 
   return (
-    <svg
-      fill="none"
-      height="16"
-      stroke="#4b5563"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="16"
-    >
+    <svg fill="none" height="16" stroke="#4b5563" strokeWidth="2" viewBox="0 0 24 24" width="16">
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
     </svg>
   );
 }
 
-export default function FleetActiveTable() {
+// Interface yang sudah diperluas untuk menerima fungsi kontrol dari FleetPageClient
+interface FleetActiveTableProps {
+  dbVessels: Array<{
+    id: string;
+    dest: string;
+    status: string;
+    st: string;
+    eta: string;
+    mon: string;
+  }>;
+  onOpenCreate: () => void;
+  onOpenEdit: (vessel: any) => void;
+  onDelete: (id: string) => void;
+}
+
+export default function FleetActiveTable({ 
+  dbVessels, 
+  onOpenCreate, 
+  onOpenEdit, 
+  onDelete 
+}: FleetActiveTableProps) {
   const [query, setQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const deferredQuery = useDeferredValue(query);
@@ -113,7 +70,8 @@ export default function FleetActiveTable() {
     setCurrentPage(1);
   }, [deferredQuery]);
 
-  const filteredVessels = filterItemsByQuery(vessels, deferredQuery, [
+  // Memproses pencarian data real-time berdasarkan query input
+  const filteredVessels = filterItemsByQuery(dbVessels, deferredQuery, [
     (vessel) => vessel.id,
     (vessel) => vessel.dest,
     (vessel) => vessel.status,
@@ -126,7 +84,7 @@ export default function FleetActiveTable() {
       <div className="panel-label">ARMADA AKTIF</div>
       <div
         className="table-header-ctrl"
-        style={{ justifyContent: "space-between", flexWrap: "wrap" }}
+        style={{ justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}
       >
         <DataSearchInput
           ariaLabel="Search vessel records"
@@ -134,31 +92,45 @@ export default function FleetActiveTable() {
           placeholder="Search vessel..."
           value={query}
         />
+        
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "12px",
+            gap: "16px",
             flexWrap: "wrap",
             justifyContent: "flex-end",
           }}
         >
-          <span
-            style={{
-              fontSize: 9,
-              color: "#22d3ee",
-              border: "1px solid #22d3ee",
-              padding: "2px 8px",
-              borderRadius: 10,
-            }}
+          {/* Tombol Register Baru di dalam kendali header tabel */}
+          <button 
+            className="btn-cyber" 
+            onClick={onOpenCreate}
+            style={{ padding: "5px 12px", fontSize: "10px" }}
           >
-            LIVE_STREAM
-          </span>
-          <span style={{ fontSize: 9, color: "#4b5563" }}>
-            {filteredVessels.length} MATCHING VESSELS
-          </span>
+            [+] REGISTER NEW VESSEL
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span
+              style={{
+                fontSize: 9,
+                color: "#22d3ee",
+                border: "1px solid #22d3ee",
+                padding: "2px 8px",
+                borderRadius: 10,
+                fontFamily: "'Share Tech Mono', monospace"
+              }}
+            >
+              LIVE_STREAM
+            </span>
+            <span style={{ fontSize: 9, color: "#4b5563", fontFamily: "'Share Tech Mono', monospace" }}>
+              {filteredVessels.length} MATCHING VESSELS
+            </span>
+          </div>
         </div>
       </div>
+      
       <div className="table-wrap">
         <table>
           <thead>
@@ -168,13 +140,14 @@ export default function FleetActiveTable() {
               <th>STATUS</th>
               <th>ETA</th>
               <th>MONITORING</th>
+              <th style={{ textAlign: "right" }}>ACTIONS</th> {/* Kolom Aksi Baru */}
             </tr>
           </thead>
           <tbody>
             {paginatedVessels.items.length === 0 ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   style={{
                     color: "#4b5563",
                     fontFamily: "'Share Tech Mono', monospace",
@@ -202,7 +175,7 @@ export default function FleetActiveTable() {
                       style={{
                         fontFamily: "'Share Tech Mono'",
                         fontSize: 13,
-                        color: vessel.eta === "UNKNOWN" ? "#f87171" : "#fff",
+                        color: vessel.eta === "UNKNOWN" || vessel.eta === "--" ? "#f87171" : "#fff",
                       }}
                     >
                       {vessel.eta}
@@ -210,6 +183,41 @@ export default function FleetActiveTable() {
                   </td>
                   <td>
                     <MonIcon t={vessel.mon} />
+                  </td>
+                  {/* Kolom tombol aksi Edit & Delete */}
+                  <td style={{ textAlign: "right" }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                      <button 
+                        onClick={() => onOpenEdit(vessel)}
+                        style={{
+                          background: "transparent",
+                          border: "1px solid rgba(168, 85, 247, 0.4)",
+                          color: "#a855f7",
+                          fontFamily: "'Share Tech Mono', monospace",
+                          fontSize: "10px",
+                          padding: "3px 8px",
+                          cursor: "pointer",
+                          borderRadius: "2px"
+                        }}
+                      >
+                        EDIT
+                      </button>
+                      <button 
+                        onClick={() => onDelete(vessel.id)}
+                        style={{
+                          background: "transparent",
+                          border: "1px solid rgba(248, 113, 113, 0.4)",
+                          color: "#f87171",
+                          fontFamily: "'Share Tech Mono', monospace",
+                          fontSize: "10px",
+                          padding: "3px 8px",
+                          cursor: "pointer",
+                          borderRadius: "2px"
+                        }}
+                      >
+                        DEL
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -236,3 +244,4 @@ export default function FleetActiveTable() {
     </div>
   );
 }
+

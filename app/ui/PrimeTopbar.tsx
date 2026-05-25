@@ -2,7 +2,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 
-export default function PrimeTopbar() {
+// 🔍 1. Definisikan tipe data Props agar TypeScript tahu komponen ini bisa menerima fungsi onSearch
+interface PrimeTopbarProps {
+  onSearch?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+// 🔍 2. Masukkan destructuring props { onSearch } ke dalam argumen fungsi komponen
+export default function PrimeTopbar({ onSearch }: PrimeTopbarProps) {
   const router = useRouter();
   const path = usePathname();
   const [showMore, setShowMore] = useState(false);
@@ -160,6 +166,7 @@ export default function PrimeTopbar() {
             placeholder="SEARCH UNIT..." 
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
+            onChange={onSearch} // 🔍 3. Hubungkan callback onChange bawaan ke prop onSearch dari parent
             style={{
               background: "none", border: "none", outline: "none",
               color: "#fff", fontFamily: "'Share Tech Mono', monospace",
@@ -214,7 +221,7 @@ export default function PrimeTopbar() {
           </svg>
         </div>
 
-        {/* User Avatar (Kembali ke fungsi profil) */}
+        {/* User Avatar */}
         <div
           onClick={() => router.push("/profile")}
           style={{
