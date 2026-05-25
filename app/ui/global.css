@@ -1,0 +1,100 @@
+/* 1. Aturan @import WAJIB berada di baris paling atas */
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;600;700;900&display=swap');
+
+/* 2. Disusul oleh konfigurasi Tailwind CSS */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 2, 6, 23; /* Warna #020617 */
+  --background-end-rgb: 3, 7, 18;   /* Warna #030712 */
+}
+
+@layer base {
+  body {
+    @apply bg-[#020617] text-white antialiased;
+    font-family: var(--font-inter), ui-sans-serif, system-ui;
+  }
+
+  h1, h2, h3, h4, .font-space {
+    font-family: var(--font-space), ui-sans-serif, system-ui;
+  }
+}
+
+/* Scrollbar Custom agar terlihat lebih futuristik */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #020617;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e1b4b;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3730a3;
+}
+
+/* 3. Gaya kustom untuk Dashboard Serena Sail */
+@layer utilities {
+  .layout { display: grid; grid-template-columns: 1fr 280px; gap: 10px; padding: 10px; background: #0a0a10; min-height: calc(100vh - 46px); }
+  .left-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .panel { background: #0f0f1a; border: 1px solid rgba(255,255,255,0.07); border-radius: 4px; overflow: hidden; position: relative; }
+  .ph { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px 10px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .pt { display: flex; align-items: center; gap: 9px; font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: 0.2em; color: #e5e7eb; }
+  .ptb { width: 3px; height: 14px; background: #a855f7; border-radius: 2px; flex-shrink: 0; }
+  .pts { font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #4b5563; letter-spacing: 0.12em; }
+  
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th { font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #4b5563; letter-spacing: 0.2em; text-align: left; padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); font-weight: 400; text-transform: uppercase; background: rgba(255,255,255,0.012); white-space: nowrap; }
+  th:nth-child(1){width:22%} th:nth-child(2){width:28%} th:nth-child(3){width:18%} th:nth-child(4){width:20%} th:nth-child(5){width:12%}
+  td { padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+  tbody tr:hover { background: rgba(168,85,247,0.04); }
+  
+  .vid { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: #22d3ee; letter-spacing: 0.05em; }
+  .sc { display: flex; align-items: center; gap: 7px; font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 0.14em; white-space: nowrap; }
+  .sdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; animation: blink 2s ease-in-out infinite; }
+  @keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
+  .eta { font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 0.05em; }
+  
+  /* Map Section */
+  .map-panel { flex: 1; min-height: 350px; }
+  .map-outer { display: flex; height: 100%; min-height: 350px; }
+  .map-wrap { position: relative; flex: 1; background-color: #05050a; overflow: hidden; }
+  #map-container { position: absolute; inset: 0; z-index: 1; }
+  .map-card { position: absolute; top: 14px; left: 14px; background: rgba(8,5,22,0.85); border: 1px solid rgba(168,85,247,0.45); border-radius: 4px; padding: 10px 16px; backdrop-filter: blur(8px); z-index: 5; }
+  .map-card-label { font-family: 'Share Tech Mono', monospace; font-size: 7px; color: #a855f7; letter-spacing: 0.28em; margin-bottom: 4px; }
+  .map-card-count { font-family: 'Orbitron', sans-serif; font-size: 20px; font-weight: 700; color: #fff; }
+  .map-card-sub { font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #22d3ee; }
+  .map-ctrl-wrap { position: absolute; right: 14px; top: 14px; display: flex; flex-direction: column; gap: 4px; z-index: 10; }
+  .mc { width: 26px; height: 26px; background: rgba(10,10,20,0.9); border: 1px solid rgba(255,255,255,0.2); border-radius: 3px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #22d3ee; font-size: 16px; transition: all 0.2s; }
+  .mc:hover { background: #a855f7; color: #fff; border-color: #fff; }
+  .map-tele { width: 180px; flex-shrink: 0; background: rgba(9,9,20,0.9); border-left: 1px solid rgba(255,255,255,0.07); padding: 14px; }
+  .tt { font-family: 'Share Tech Mono', monospace; font-size: 8px; color: #22d3ee; letter-spacing: 0.2em; margin-bottom: 12px; }
+  .tr { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .tk { font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #6b7280; }
+  .tv { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #e5e7eb; }
+
+  /* Fuel Section */
+  .fuel-panel { flex: 1; display: flex; flex-direction: column; min-height: 200px; }
+  .fca { flex: 1; padding: 20px 14px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .brow { display: flex; align-items: flex-end; gap: 8px; height: 100px; width: 100%; }
+  .bc { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .bf { width: 100%; border-radius: 2px 2px 0 0; transition: height 0.3s ease; }
+  .bl { margin-top: 8px; font-family: 'Share Tech Mono', monospace; font-size: 7px; color: #4b5563; text-align: center; }
+
+  /* Logs Section */
+  .right-col { display: flex; flex-direction: column; gap: 10px; }
+  .ah { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px 9px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .at { display: flex; align-items: center; gap: 7px; font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #e5e7eb; letter-spacing: 0.18em; }
+  .ald { width: 8px; height: 8px; border-radius: 50%; background: #f87171; box-shadow: 0 0 7px #f87171; animation: blink 1s infinite; }
+  .ac { padding: 10px 14px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .atype { font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 0.16em; font-weight: 600; }
+  .abody { font-family: 'Rajdhani', sans-serif; font-size: 12px; color: #9ca3af; line-height: 1.4; }
+}
