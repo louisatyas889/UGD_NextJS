@@ -1,5 +1,14 @@
-## Next.js App Router Course - Starter
+# Serena Sail - Maritime Logistics Dashboard
 
-This is the starter template for the Next.js App Router Course. It contains the starting code for the dashboard application.
+Aplikasi dashboard logistik maritim berbasis Next.js 16 + Tailwind CSS + Neon PostgreSQL.
 
-For more information, see the [course curriculum](https://nextjs.org/learn) on the Next.js Website.
+## Fitur
+- Manajemen Kargo (CRUD)
+- Manajemen User / Crew
+- Fleet & Logistics (Vessel + Tracking Package)
+- Security & Accounts
+- Real-time Map Tracking
+- Dashboard Analytics
+
+## Deploy
+Production: https://ugd-nextjs.vercel.app
