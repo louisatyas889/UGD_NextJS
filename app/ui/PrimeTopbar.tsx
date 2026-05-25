@@ -35,9 +35,9 @@ export default function PrimeTopbar({ onSearch }: PrimeTopbarProps) {
   ];
 
   const moreNavs = [
-    { label: "LIVE TRACKING MODE", href: "/admin/live-tracking" },
-    { label: "LOGISTICS OPTIMIZATION", href: "/admin/logistic-optimazation" },
-    { label: "VESSEL DEPLOYMENT", href: "/admin/vessel-deployement" },
+    { label: "LIVE TRACKING MODE", href: "/live-tracking" },
+    { label: "LOGISTICS OPTIMIZATION", href: "/logistic-optimization" },
+    { label: "VESSEL DEPLOYMENT", href: "/vessel-deployment" },
   ];
 
   const isActive = (href: string) => path === href;

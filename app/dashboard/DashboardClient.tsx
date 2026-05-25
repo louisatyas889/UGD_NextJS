@@ -160,31 +160,31 @@ export default function DashboardClient({ initialCards, initialLogs, initialFuel
               <div className="pt"><div className="ptb"/>FLEET OVERVIEW</div>
               <span className="pts">SYSTEM CLOCK: {utc}</span>
             </div>
-            <table>
-              <thead>
-                <tr><th>ID KAPAL</th><th>TUJUAN</th><th>STATUS</th><th>ETA</th><th>MONITORING</th></tr>
-              </thead>
-              <tbody>
-                {/* 🔍 Ganti initialVessels dengan array filteredVessels yang telah disaring */}
-                {filteredVessels && filteredVessels.length > 0 ? (
-                    filteredVessels.map(v => (
-                    <tr key={v.id}>
-                        <td><span className="vid">{v.id}</span></td>
-                        <td><span style={{fontSize:13, color:"#d1d5db", fontWeight:500}}>{v.dest}</span></td>
-                        <td><div className="sc"><div className="sdot" style={{background:v.statusColor, boxShadow:`0 0 6px ${v.statusColor}`}}/><span style={{color:v.statusColor}}>{v.status}</span></div></td>
-                        <td><span className="eta" style={{color:v.etaColor}}>{v.eta}</span></td>
-                        <td><MonIcon t={v.mon}/></td>
-                    </tr>
-                    ))
-                ) : (
-                    <tr>
-                    <td colSpan={5} style={{textAlign:"center", color:"#4b5563", fontFamily:"'Share Tech Mono', monospace", fontSize:11, padding:20}}>
-                        {searchQuery ? `NO VESSELS MATCHING "${searchQuery.toUpperCase()}"` : "NO VESSEL DATA FOUND IN NEON DATABASE"}
-                    </td>
-                    </tr>
-                )}
-                </tbody>
-            </table>
+            {filteredVessels && filteredVessels.length > 0 ? (
+              filteredVessels.map(v => (
+                <div key={v.id} style={{ display: "flex", alignItems: "center", gap: "16px", padding: "14px 18px", borderBottom: "1px solid rgba(255,255,255,0.04)", transition: "background 0.15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(168,85,247,0.04)"; }} onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <span className="vid">{v.id}</span>
+                    <div style={{ fontSize: 12, color: "#d1d5db", fontWeight: 500, marginTop: 2 }}>{v.dest}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: v.statusColor, boxShadow: `0 0 6px ${v.statusColor}`, flexShrink: 0, animation: "blink 2s ease-in-out infinite" }} />
+                    <span style={{ display: "inline-flex", fontSize: 9, fontFamily: "'Share Tech Mono', monospace", color: v.statusColor, padding: "3px 10px", borderRadius: 20, border: `1px solid ${v.statusColor}33`, background: `${v.statusColor}15`, letterSpacing: "0.1em" }}>{v.status}</span>
+                  </div>
+                  <div style={{ minWidth: 80, textAlign: "right" }}>
+                    <span className="eta" style={{ color: v.etaColor }}>{v.eta}</span>
+                  </div>
+                  <div style={{ minWidth: 32, display: "flex", justifyContent: "center" }}>
+                    <MonIcon t={v.mon} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div style={{ padding: 24, textAlign: "center", color: "#4b5563", fontFamily: "'Share Tech Mono', monospace", fontSize: 11 }}>
+                {searchQuery ? `NO VESSELS MATCHING "${searchQuery.toUpperCase()}"` : "NO VESSEL DATA FOUND"}
+              </div>
+            )}
           </div>
 
           <div className="panel map-panel">
