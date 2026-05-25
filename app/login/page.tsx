@@ -1,67 +1,60 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { users, dummyAdmins } from "../lib/placeholder-data";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [id, setId] = useState(""); 
+  const [id, setId] = useState("");
   const [key, setKey] = useState("");
-  const [sync, setSync] = useState(false); 
+  const [sync, setSync] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [status, setStatus] = useState("WAITING FOR INPUT..."); 
+  const [status, setStatus] = useState("WAITING FOR INPUT...");
   const [statusColor, setStatusColor] = useState("#a855f7");
   const [error, setError] = useState("");
 
-  const handleConnect = () => {
+  const handleConnect = async () => {
     if (connecting) return;
 
-    // 1. Validasi Input Kosong
-    if (!id.trim() || !key.trim()) { 
-      setError("OPERATOR ID & AUTHORIZATION KEY REQUIRED"); 
-      setStatus("INPUT ERROR"); 
-      setStatusColor("#f87171"); 
-      return; 
+    if (!id.trim() || !key.trim()) {
+      setError("OPERATOR ID & AUTHORIZATION KEY REQUIRED");
+      setStatus("INPUT ERROR");
+      setStatusColor("#f87171");
+      return;
     }
 
-    setError(""); 
-    setConnecting(true); 
-    setStatus("AUTHENTICATING..."); 
+    setError("");
+    setConnecting(true);
+    setStatus("AUTHENTICATING...");
     setStatusColor("#f59e0b");
 
-    // 2. Simulasi Delay Network (2.5 detik)
-    setTimeout(() => {
-      // Cek apakah kredensial cocok dengan data ADMIN (Prioritas)
-      const isAdmin = dummyAdmins.find(
-        (admin: any) => admin.id === id && admin.key === key
-      );
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: id.trim(), key: key.trim() }),
+      });
 
-      // Cek apakah kredensial cocok dengan data USER biasa
-      const isValidUser = users.find(
-        (user: any) => user.id === id && user.key === key
-      );
+      const data = await response.json();
 
-      if (isAdmin) {
-        setStatus("ADMIN ACCESS GRANTED — INITIALIZING SECURE TERMINAL...");
-        setStatusColor("#a855f7");
-        
-        // Arahkan ke halaman admin cargo
-        setTimeout(() => router.push("/admin"), 2000);
-
-      } else if (isValidUser) {
-        setStatus("CONNECTION ESTABLISHED — REDIRECTING...");
-        setStatusColor("#22c55e");
-        
-        // Arahkan ke dashboard standar
-        setTimeout(() => router.push("/dashboard"), 2000);
-
-      } else {
+      if (!response.ok) {
         setConnecting(false);
-        setError("INVALID OPERATOR ID OR ACCESS KEY");
+        setError(data.message || "INVALID OPERATOR ID OR ACCESS KEY");
         setStatus("ACCESS DENIED");
         setStatusColor("#ef4444");
+        return;
       }
-    }, 2500);
+
+      setStatus("AUTHENTICATION SUCCESSFUL — INITIALIZING SECURE TERMINAL...");
+      setStatusColor("#22c55e");
+
+      const homePath = data.user?.homePath ?? "/admin";
+      setTimeout(() => router.push(homePath), 1500);
+    } catch {
+      setConnecting(false);
+      setError("NETWORK ERROR — UNABLE TO REACH AUTHENTICATION SERVER");
+      setStatus("CONNECTION FAILED");
+      setStatusColor("#ef4444");
+    }
   };
 
   return (
@@ -174,7 +167,7 @@ export default function LoginPage() {
             <div className="logo-text">
               <span className="logo-name">Serene Sail</span>
               <span className="logo-sub">MARITIME INTELLIGENCE NETWORK</span>
-              <div className="logo-coords">LAT: 51.5074° N<br/>LONG: 0.1278° W<br/>BEARING: 264.0°</div>
+              <div className="logo-coords">LAT: 51.5074&deg; N<br/>LONG: 0.1278&deg; W<br/>BEARING: 264.0&deg;</div>
             </div>
           </div>
           <div className="status-pills">
@@ -188,17 +181,17 @@ export default function LoginPage() {
             <div className="corner tl"/><div className="corner tr"/><div className="corner bl"/><div className="corner br"/>
             <div className="modal-title">SECURE ACCESS PORTAL</div>
             <div className="modal-sub">Classified intelligence access. Verify credentials.</div>
-            
+
             <div className="field">
               <span className="field-label">OPERATOR ID</span>
               <div className="input-wrap">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <input 
-                  type="text" 
-                  value={id} 
-                  onChange={e=>{setId(e.target.value); setError("")}} 
-                  onKeyDown={e=>e.key==="Enter"&&handleConnect()} 
-                  placeholder="e.g. Alpha-9-Delta"
+                <input
+                  type="text"
+                  value={id}
+                  onChange={e => { setId(e.target.value); setError(""); }}
+                  onKeyDown={e => e.key === "Enter" && handleConnect()}
+                  placeholder="e.g. Louisa-Admin"
                   disabled={connecting}
                 />
               </div>
@@ -208,11 +201,11 @@ export default function LoginPage() {
               <span className="field-label">AUTHORIZATION KEY</span>
               <div className="input-wrap">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-                <input 
-                  type="password" 
-                  value={key} 
-                  onChange={e=>{setKey(e.target.value); setError("")}} 
-                  onKeyDown={e=>e.key==="Enter"&&handleConnect()} 
+                <input
+                  type="password"
+                  value={key}
+                  onChange={e => { setKey(e.target.value); setError(""); }}
+                  onKeyDown={e => e.key === "Enter" && handleConnect()}
                   placeholder="············"
                   disabled={connecting}
                 />
@@ -221,14 +214,14 @@ export default function LoginPage() {
 
             {error && (
               <div className="err-box">
-                <span className="err-text">⚠ {error}</span>
+                <span className="err-text">{error}</span>
               </div>
             )}
 
             <div className="row-opt">
-              <div className="check-wrap" onClick={()=>setSync(!sync)}>
-                <div className="check-box" style={{background:sync?"rgba(168,85,247,0.25)":"transparent"}}>
-                  {sync&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+              <div className="check-wrap" onClick={() => setSync(!sync)}>
+                <div className="check-box" style={{ background: sync ? "rgba(168,85,247,0.25)" : "transparent" }}>
+                  {sync && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
                 </div>
                 <span className="check-label">STAY SYNCHRONIZED</span>
               </div>
@@ -241,8 +234,8 @@ export default function LoginPage() {
             </button>
 
             <div className="status-row">
-              <div className="sdot" style={{background:statusColor, boxShadow:`0 0 7px ${statusColor}`}}/>
-              <span className="stext" style={{color: statusColor}}>{status}</span>
+              <div className="sdot" style={{ background: statusColor, boxShadow: `0 0 7px ${statusColor}` }}/>
+              <span className="stext" style={{ color: statusColor }}>{status}</span>
             </div>
           </div>
         </div>
@@ -251,7 +244,7 @@ export default function LoginPage() {
           <a href="#">EMERGENCY PROTOCOL</a><a href="#">NETWORK STATUS</a><a href="#">LEGAL</a>
         </div>
         <div className="footer-bottom">
-          <span className="footer-copy">© 2026 SERENE SAIL MARITIME INTELLIGENCE NETWORK. ALL RIGHTS RESERVED.</span>
+          <span className="footer-copy">&copy; 2026 SERENE SAIL MARITIME INTELLIGENCE NETWORK. ALL RIGHTS RESERVED.</span>
           <div className="footer-right">
             <div className="footer-links"><a href="#">SECURE ACCESS POLICY</a><a href="#">TERMS OF SERVICE</a><a href="#">PRIVACY PROTOCOL</a></div>
             <span className="footer-enc">ENCRYPTION: AES-256-GCM<br/>PROTOCOL: MARITIME_SECURE_V4</span>
