@@ -65,7 +65,7 @@ export async function GET() {
           ${v.dest},
           ${v.status},
           ${"#22d3ee"},
-          ${"AUTO ETA"},
+          ${"etaValue"},
           ${"#e5e7eb"},
           ${"chart"},
           ${v.pct}

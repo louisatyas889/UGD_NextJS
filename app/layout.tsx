@@ -1,6 +1,8 @@
 import { Inter, Space_Grotesk } from 'next/font/google';
-import '../app/ui/global.css';
+import './ui/global.css';
 import { Metadata } from 'next';
+// 1. Pastikan path import ini benar sesuai dengan lokasi file FleetContext.tsx kamu
+import { FleetProvider } from './context/FleetContext'; 
 
 // Font untuk teks body (Inter)
 const inter = Inter({ 
@@ -25,10 +27,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`scroll-smooth ${inter.variable} ${spaceGrotesk.variable}`}>
       <body className="antialiased bg-[#020617] text-white font-sans selection:bg-cyan-500/30">
-        {/* Struktur ini memastikan children (page.tsx) 
-          mengisi seluruh layar tanpa hambatan layout luar.
-        */}
-        {children}
+        {/* 2. Bungkus children dengan FleetProvider agar state simulator bertahan global */}
+        <FleetProvider>
+          {children}
+        </FleetProvider>
       </body>
     </html>
   );

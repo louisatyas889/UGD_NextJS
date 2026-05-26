@@ -10,21 +10,30 @@ export default async function FleetPage() {
   // 2. Petakan kolom Neon ke properti UI dengan menambahkan tipe : any agar tidak merah
   const initialVessels = (vesselsFromDb || []).map((v: any) => {
     const lowerStatus = v.status?.toLowerCase() || "";
-    let statusClass = "maint";
     
-    if (lowerStatus.includes("en route") || lowerStatus.includes("en_route")) statusClass = "enroute";
-    else if (lowerStatus.includes("delay")) statusClass = "delayed";
-    else if (lowerStatus.includes("port") || lowerStatus.includes("docked") || lowerStatus.includes("in port")) statusClass = "inport";
+    // Tentukan kode warna HEX asli untuk kebutuhan render Grafik Bar di Client Panel
+    let hexColor = "#f472b6"; // Default maintenance (Pink)
+    if (lowerStatus.includes("en route") || lowerStatus.includes("en_route")) {
+      hexColor = "#22d3ee"; // Cyan
+    } else if (lowerStatus.includes("delay")) {
+      hexColor = "#f87171"; // Merah
+    } else if (lowerStatus.includes("port") || lowerStatus.includes("docked") || lowerStatus.includes("in port")) {
+      hexColor = "#9ca3af"; // Abu-abu
+    }
 
     return {
       id: v.id,
       // Fallback bersilangan jika di skema database tertulis 'destination' atau 'dest'
       dest: v.destination || v.dest || "UNKNOWN HUB", 
       status: v.status || "MAINTENANCE",
-      st: statusClass,
+      st: hexColor, // Sekarang berisi kode warna HEX asli (#22d3ee, dll) untuk menyalakan grafik!
       eta: v.eta || "--",
       // Mengamankan fallback monitoring icon saat update/create data baru
       mon: v.monitoring_icon || v.mon || "chart",
+      // Ambil properti subtitle dari Neon DB agar nama/serial teks tidak hilang
+      subtitle: v.subtitle || "",
+      // 🌟 TAMBAHAN FIX SINKRONISASI: Ambil persentase murni dari kolom database progress_pct
+      progress: Number(v.progress_pct) || 0 
     };
   });
 

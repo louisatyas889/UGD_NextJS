@@ -43,6 +43,9 @@ export default function PrimeTopbar({ onSearch }: PrimeTopbarProps) {
   const isActive = (href: string) => path === href;
   const isMoreActive = moreNavs.some((item) => path === item.href);
 
+  // 🔍 Cek kondisi: Sembunyikan search jika berada di halaman /fleet atau /map
+  const hideSearch = path === "/fleet" || path === "/map";
+
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -146,34 +149,36 @@ export default function PrimeTopbar({ onSearch }: PrimeTopbarProps) {
       {/* Kolom Kanan: Search, Actions, Logout, & Profile */}
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         
-        {/* Search Bar */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          background: "rgba(255,255,255,0.03)",
-          border: `1px solid ${searchFocused ? "rgba(168,85,247,0.6)" : "rgba(255,255,255,0.08)"}`,
-          borderRadius: 4,
-          padding: "0 10px",
-          height: 28,
-          width: searchFocused ? 180 : 130,
-          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-        }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={searchFocused ? "#a855f7" : "#6b7280"} strokeWidth="2.5" style={{ marginRight: 6 }}>
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input 
-            type="text" 
-            placeholder="SEARCH UNIT..." 
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            onChange={onSearch} // 🔍 3. Hubungkan callback onChange bawaan ke prop onSearch dari parent
-            style={{
-              background: "none", border: "none", outline: "none",
-              color: "#fff", fontFamily: "'Share Tech Mono', monospace",
-              fontSize: 9, width: "100%", letterSpacing: "0.1em"
-            }}
-          />
-        </div>
+        {/* 🔍 Search Bar (Hanya muncul jika TIDAK berada di /fleet atau /map) */}
+        {!hideSearch && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            background: "rgba(255,255,255,0.03)",
+            border: `1px solid ${searchFocused ? "rgba(168,85,247,0.6)" : "rgba(255,255,255,0.08)"}`,
+            borderRadius: 4,
+            padding: "0 10px",
+            height: 28,
+            width: searchFocused ? 180 : 130,
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={searchFocused ? "#a855f7" : "#6b7280"} strokeWidth="2.5" style={{ marginRight: 6 }}>
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input 
+              type="text" 
+              placeholder="SEARCH UNIT..." 
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              onChange={onSearch} // 🔍 3. Hubungkan callback onChange bawaan ke prop onSearch dari parent
+              style={{
+                background: "none", border: "none", outline: "none",
+                color: "#fff", fontFamily: "'Share Tech Mono', monospace",
+                fontSize: 9, width: "100%", letterSpacing: "0.1em"
+              }}
+            />
+          </div>
+        )}
 
         {/* Quick Action Icons */}
         <div style={{ display: "flex", gap: 6 }}>

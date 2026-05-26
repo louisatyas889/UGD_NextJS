@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import PrimeTopbar from "../ui/PrimeTopbar";
+// 👍 Menggunakan relative path agar aman dari error alias path Next.js
+import { useFleet } from "../context/FleetContext"; 
 
 interface DbVessel {
   id: string;
@@ -8,6 +10,7 @@ interface DbVessel {
   status: string;
   status_color: string;
   eta: string;
+  progress_pct?: number; 
 }
 
 interface AnalyticsPageClientProps {
@@ -16,9 +19,12 @@ interface AnalyticsPageClientProps {
 
 export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientProps) {
   const [time, setTime] = useState("");
-  // 🔍 1. State global untuk menampung query pencarian user
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Ambil state global dari FleetContext
+  const { vesselEnergy, initializeFleet } = useFleet();
 
+  // 1. Efek Jam Digital Standard
   useEffect(() => {
     const t = () => {
       const n = new Date();
@@ -33,10 +39,16 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
     return () => clearInterval(id);
   }, []);
 
+  // 2. Hubungkan data database armada ke Global Simulator saat halaman terbuka
+  useEffect(() => {
+    if (dbVessels && dbVessels.length > 0) {
+      initializeFleet(dbVessels);
+    }
+  }, [dbVessels, initializeFleet]);
+
   // ==========================================
   // 🔍 WIRE UP FILTER: SARING DATA BERDASARKAN KEYWORD
   // ==========================================
-  // Data armada disaring berdasarkan ID atau Nama Destinasi secara live
   const filteredVessels = dbVessels.filter((v) => {
     const query = searchQuery.toLowerCase();
     return (
@@ -47,44 +59,61 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
   });
 
   // ==========================================
-  // 🔥 BRAIN CENTER: HITUNG DATA LIVE (DARI DATA YANG SUDAH DISARING)
+  // 🔥 BRAIN CENTER: HITUNG DATA LIVE RIIL
   // ==========================================
-  
-  // 1. Hitung Status Operasional untuk Donut Chart
-  const totalUnits = filteredVessels.length;
-  const enRouteCount = filteredVessels.filter(v => v.status?.toLowerCase().includes("route") || v.status?.toLowerCase().includes("en")).length;
-  const portCount = filteredVessels.filter(v => v.status?.toLowerCase().includes("port") || v.status?.toLowerCase().includes("docked")).length;
-  const maintenanceCount = filteredVessels.filter(v => v.status?.toLowerCase().includes("maintenance") || v.status?.toLowerCase().includes("repair")).length;
+  const globalTotal = dbVessels.length;
+  const globalPortCount = dbVessels.filter(v => {
+    const s = v.status?.toLowerCase() || "";
+    return s.includes("port") || s.includes("docked") || s.includes("load");
+  }).length;
 
-  // Rasio Persentase Kapal yang Sedang Berjalan (En Route)
+  const dynamicArrivalRate = globalTotal > 0 
+    ? Math.round(((globalTotal - globalPortCount) / globalTotal) * 100) 
+    : 100;
+
+  const totalUnits = filteredVessels.length;
+  
+  const enRouteCount = filteredVessels.filter(v => {
+    const s = v.status?.toLowerCase() || "";
+    return s.includes("route") || s.includes("transit") || s.includes("depart") || s.includes("storm") || s.includes("approach");
+  }).length;
+
+  const portCount = filteredVessels.filter(v => {
+    const s = v.status?.toLowerCase() || "";
+    return s.includes("port") || s.includes("docked") || s.includes("load");
+  }).length;
+
+  const maintenanceCount = filteredVessels.filter(v => {
+    const s = v.status?.toLowerCase() || "";
+    return s.includes("maintenance") || s.includes("repair") || s.includes("delay");
+  }).length;
+
   const enRoutePercentage = totalUnits > 0 ? Math.round((enRouteCount / totalUnits) * 100) : 0;
   
-  // Hitung stroke-dasharray SVG Donut secara dinamis berdasarkan persentase (Keliling lingkaran r=40 adalah ~251)
+  // ✅ DEFINISI STROKEDASHARRAY (Memperbaiki error 'strokeDasharray is not defined')
   const strokeDashOffset = totalUnits > 0 ? (enRoutePercentage / 100) * 251 : 0;
-  const strokeDashArray = `${strokeDashOffset} 251`;
+  const strokeDasharray = `${strokeDashOffset} 251`;
 
-  // 2. Simulasi Data Bahan Bakar Bersasarkan ID Kapal agar Dinamis tapi Konsisten
-  const generateFuelPercentage = (id: string) => {
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-      hash = id.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return 40 + (Math.abs(hash) % 56); // Menghasilkan angka tangki acak yang stabil antara 40% - 95%
-  };
-
+  // Map data energi dari global state ke chart visual
   const fuelData = filteredVessels.map(v => ({
-    c: v.status_color || "#a855f7",
-    h: generateFuelPercentage(v.id),
-    l: v.id.split("-").pop() || v.id // Ambil nama belakang jika ID berupa format PL-300-MARS
+    c: v.status_color || "#22d3ee",
+    h: vesselEnergy[v.id] !== undefined ? vesselEnergy[v.id] : (v.progress_pct !== undefined ? v.progress_pct : 100), 
+    l: v.id
   }));
 
-  // 3. Batasi Tampilan Maksimal 3 Kapal Terbaru untuk Widget Lokasi & Kapasitas Kargo
-  const topVessels = filteredVessels.slice(0, 3).map((v) => ({
-    id: v.id,
-    name: v.destination || "UNKNOWN OCEAN",
-    cap: generateFuelPercentage(v.id) - 10, // Simulasi kapasitas kargo linear
-    color: v.status_color || "#a855f7"
-  }));
+  const topVessels = filteredVessels.slice(0, 3).map((v) => {
+    const s = v.status?.toLowerCase() || "";
+    const isEnRoute = s.includes("route") || s.includes("transit") || s.includes("depart") || s.includes("storm") || s.includes("approach");
+    
+    let cargoCapacity = isEnRoute ? 98 : 0; 
+
+    return {
+      id: v.id,
+      name: v.destination || "UNKNOWN OCEAN",
+      cap: cargoCapacity,
+      color: v.status_color || "#22d3ee"
+    };
+  });
 
   return (
     <>
@@ -107,9 +136,10 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
         .kpi-sub { font-family: 'Share Tech Mono', monospace; font-size: 9px; margin-top: 10px; }
         .kpi-icon-box { position: absolute; top: 20px; right: 20px; color: #4b5563; }
 
-        .fuel-chart-wrap { display: flex; align-items: flex-end; gap: 10px; height: 180px; margin-top: 30px; border-bottom: 1px solid #111; padding-bottom: 10px; overflow-x: auto; }
-        .fuel-bar { flex: 1; min-width: 40px; border-radius: 2px 2px 0 0; position: relative; transition: height 0.5s ease; }
-        .fuel-bar-label { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-family: 'Share Tech Mono', monospace; font-size: 7px; color: #555; white-space: nowrap; }
+        .fuel-chart-wrap { display: flex; align-items: flex-end; justify-content: flex-start; gap: 25px; height: 180px; margin-top: 30px; border-bottom: 1px solid #111; padding-bottom: 25px; padding-top: 25px; overflow-x: auto; }
+        
+        .fuel-bar { width: 55px; min-width: 55px; border-radius: 2px 2px 0 0; position: relative; transition: height 0.5s ease-in-out; }
+        .fuel-bar-label { position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%); font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #777; white-space: nowrap; }
 
         .loc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 15px; }
         .loc-card { background: #0d0d0d; padding: 15px; border-radius: 4px; border-left: 2px solid rgba(255,255,255,0.05); }
@@ -121,7 +151,6 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
         .donut-label { font-family: 'Share Tech Mono', monospace; font-size: 7px; color: #4b5563; margin-top: 4px; }
       `}</style>
 
-      {/* 🔍 2. Berikan prop pencarian ke Topbar kamu */}
       <PrimeTopbar onSearch={(e: any) => setSearchQuery(e.target.value)} />
 
       <div className="main-container">
@@ -144,8 +173,8 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
             <div className="kpi-row">
               <div className="kpi-card" style={{ borderLeft: "3px solid #a855f7" }}>
                 <div className="kpi-label">CARGO ARRIVAL RATE</div>
-                <div className="kpi-val">88.2 <span style={{ fontSize: 16, color: "#4b5563" }}>%</span></div>
-                <div className="kpi-sub" style={{ color: "#22d3ee" }}>◉ SUCCESS DELIVERY</div>
+                <div className="kpi-val">{dynamicArrivalRate} <span style={{ fontSize: 16, color: "#4b5563" }}>%</span></div>
+                <div className="kpi-sub" style={{ color: "#22d3ee" }}>◉ GLOBAL LOGISTICS RATE</div>
                 <div className="kpi-icon-box"><svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
               </div>
               <div className="kpi-card" style={{ borderLeft: "3px solid #22d3ee" }}>
@@ -156,13 +185,26 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
               </div>
             </div>
 
-            {/* Bahan Bakar Section */}
+            {/* Core Energy Section */}
             <div className="panel-v3">
-              <div style={{ fontFamily: "'Rajdhani'", fontSize: 14, fontWeight: 600 }}>Tingkat Bahan Bakar Armada</div>
+              <div style={{ fontFamily: "'Rajdhani'", fontSize: 14, fontWeight: 600 }}>Tingkat Energi Core Armada</div>
               <div className="fuel-chart-wrap">
                 {fuelData.length > 0 ? (
                   fuelData.map((f, i) => (
                     <div key={i} className="fuel-bar" style={{ height: `${f.h}%`, background: f.c }}>
+                      <div style={{
+                        position: "absolute",
+                        top: "-22px",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        fontFamily: "'Share Tech Mono', monospace",
+                        fontSize: "11px",
+                        color: f.c,
+                        fontWeight: "bold",
+                        textShadow: "0 0 4px rgba(0,0,0,1)"
+                      }}>
+                        {f.h}%
+                      </div>
                       <div className="fuel-bar-label">{f.l}</div>
                     </div>
                   ))
@@ -200,7 +242,6 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
 
           {/* Sisi Kanan */}
           <div className="right-col">
-            {/* Kapasitas Kargo */}
             <div className="panel-v3">
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.5px" }}>KAPASITAS KARGO TERKINI</div>
@@ -214,7 +255,7 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
                       <span style={{ color: v.color, fontWeight: 700 }}>{v.cap}% Capacity</span>
                     </div>
                     <div style={{ height: 6, background: "#111", borderRadius: 3 }}>
-                      <div style={{ width: `${v.cap}%`, height: "100%", background: v.color, borderRadius: 3, transition: "width 0.5s ease" }} />
+                      <div style={{ width: `${v.cap}%`, height: "100%", background: v.color, borderRadius: 3, transition: "width 1.2s cubic-bezier(0.4, 0, 0.2, 1)" }} />
                     </div>
                   </div>
                 ))
@@ -223,7 +264,6 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
               )}
             </div>
 
-            {/* Operational Status */}
             <div className="panel-v3">
               <div style={{ textAlign: "center", fontSize: 13, fontWeight: 700, marginBottom: 25 }}>Operational Status</div>
               <div className="donut-container">
@@ -238,14 +278,13 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
                         fill="none" 
                         stroke="#22d3ee" 
                         strokeWidth="10" 
-                        strokeDasharray={strokeDashArray} 
+                        strokeDasharray={strokeDasharray} 
                         strokeLinecap="round" 
                         style={{ transition: "stroke-dasharray 0.5s ease" }}
                       />
                     )}
                   </svg>
                   <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center", width: "100%" }}>
-                    {/* ✅ FIX TYPO: fontProject -> fontFamily */}
                     <div style={{ fontSize: 18, fontFamily: "'Orbitron'", fontWeight: 800 }}>{enRoutePercentage}%</div>
                     <div style={{ fontSize: 6, color: "#4b5563", letterSpacing: "0.5px" }}>EN ROUTE</div>
                   </div>
