@@ -37,6 +37,7 @@ export type CargoFormData = {
   itemName: string;
   itemType: string;
   itemWeightKg: string;
+  itemPrice: string;
   shippingPrice: string;
   transportMode: (typeof transportModeOptions)[number];
   deliveryType: (typeof deliveryTypeOptions)[number];
@@ -63,6 +64,7 @@ export type CargoRecord = {
   itemName: string;
   itemType: string;
   itemWeightKg: number;
+  itemPrice: number;
   shippingPrice: number;
   transportMode: (typeof transportModeOptions)[number];
   deliveryType: (typeof deliveryTypeOptions)[number];
@@ -98,6 +100,7 @@ export const emptyCargoFormData: CargoFormData = {
   itemName: "",
   itemType: "",
   itemWeightKg: "",
+  itemPrice: "",
   shippingPrice: "",
   transportMode: "Darat",
   deliveryType: "Biasa",
