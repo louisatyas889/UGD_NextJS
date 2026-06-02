@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import CargoManagementWorkspace from "./cargo-management-workspace";
 
 export const metadata: Metadata = {
   title: "Cargo Management | Serena Sail",
@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default function CargoManagementPage() {
-  redirect("/admin");
+  return <CargoManagementWorkspace />;
 }
