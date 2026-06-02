@@ -62,14 +62,17 @@ function mapCargoRows(rows: any[]): CargoRecord[] {
     senderName: String(row.nama_pengirim),
     recipientName: String(row.nama_penerima),
     phone: String(row.no_telepon),
-    originCity: String(row.kota_asal),
-    destinationCity: String(row.kota_tujuan),
+    originCity: String(row.negara_asal ?? row.kota_asal),
+    destinationCity: String(row.negara_tujuan ?? row.kota_tujuan),
+
     itemName: String(row.nama_barang),
     itemType: String(row.jenis_barang),
     itemWeightKg: Number(row.berat_barang_kg),
     shippingPrice: Number(row.harga ?? 0),
     transportMode: row.moda_pengiriman ?? "Laut",
+
     deliveryType: row.jenis_pengiriman ?? "Biasa",
+
     shipmentStatus: String(row.status_pengiriman),
     itemStatus: String(row.status_barang ?? "Siap Kirim"),
     transactionStatus: String(row.status_transaksi ?? "Belum Dibayar"),
@@ -77,10 +80,12 @@ function mapCargoRows(rows: any[]): CargoRecord[] {
     vehicleName: String(row.nama_kendaraan ?? ""),
     vehicleType: String(row.jenis_kendaraan ?? ""),
     vehicleCode: String(row.kode_kendaraan ?? ""),
+    itemPrice: Number(row.harga ?? 0),
     vehicleCapacityKg: Number(row.kapasitas_kendaraan_kg ?? 0),
     vehicleStatus: String(row.status_kendaraan ?? ""),
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : "",
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : "",
+
   }));
 }
 
@@ -139,9 +144,10 @@ export async function ensureAdminCargoSchema() {
       nama_pengirim VARCHAR(120) NOT NULL,
       nama_penerima VARCHAR(120) NOT NULL,
       no_telepon VARCHAR(30) NOT NULL,
-      kota_asal VARCHAR(120) NOT NULL,
-      kota_tujuan VARCHAR(120) NOT NULL,
+      negara_asal VARCHAR(120) NOT NULL,
+      negara_tujuan VARCHAR(120) NOT NULL,
       nama_barang VARCHAR(120) NOT NULL,
+
       jenis_barang VARCHAR(120) NOT NULL,
       berat_barang_kg NUMERIC(12, 2) NOT NULL,
       moda_pengiriman VARCHAR(20) NOT NULL,
@@ -160,14 +166,14 @@ export async function ensureAdminCargoSchema() {
   `;
 
   await sql`
-    ALTER TABLE barang
+      ALTER TABLE barang
     ADD COLUMN IF NOT EXISTS no_resi VARCHAR(50) UNIQUE,
     ADD COLUMN IF NOT EXISTS tanggal_kirim DATE,
     ADD COLUMN IF NOT EXISTS nama_pengirim VARCHAR(120),
     ADD COLUMN IF NOT EXISTS nama_penerima VARCHAR(120),
     ADD COLUMN IF NOT EXISTS no_telepon VARCHAR(30),
-    ADD COLUMN IF NOT EXISTS kota_asal VARCHAR(120),
-    ADD COLUMN IF NOT EXISTS kota_tujuan VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS negara_asal VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS negara_tujuan VARCHAR(120),
     ADD COLUMN IF NOT EXISTS nama_barang VARCHAR(120),
     ADD COLUMN IF NOT EXISTS jenis_barang VARCHAR(120),
     ADD COLUMN IF NOT EXISTS berat_barang_kg NUMERIC(12, 2),
@@ -184,6 +190,7 @@ export async function ensureAdminCargoSchema() {
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   `;
+
 
   await sql`
     CREATE TABLE IF NOT EXISTS transaksi (
@@ -366,8 +373,9 @@ export async function createAdminCargoRecord(
         nama_pengirim,
         nama_penerima,
         no_telepon,
-        kota_asal,
-        kota_tujuan,
+        negara_asal,
+        negara_tujuan,
+
         nama_barang,
         jenis_barang,
         berat_barang_kg,
