@@ -34,7 +34,9 @@ function zodErrorState(error: ZodError, fallbackMessage: string): PanelActionSta
   const flattened = error.flatten();
   return {
     success: false,
-    message: error.issues[0]?.message ?? fallbackMessage,
+    message:
+      error.issues[0]?.message ??
+      `${fallbackMessage} Pastikan formulir terisi lengkap dan tipe data sesuai.`,
     fieldErrors: flattened.fieldErrors,
   };
 }
@@ -58,7 +60,8 @@ export async function savePersonnelAction(
     console.error("savePersonnelAction error", error);
     return {
       success: false,
-      message: "Gagal menyimpan data crew.",
+      message:
+        "Gagal menyimpan data crew. Pastikan form lengkap dan tipe data sesuai.",
       fieldErrors: {},
     };
   }
@@ -83,7 +86,8 @@ export async function saveFleetVesselAction(
     console.error("saveFleetVesselAction error", error);
     return {
       success: false,
-      message: "Gagal menyimpan data vessel.",
+      message:
+        "Gagal menyimpan data vessel. Pastikan form lengkap dan tipe data sesuai.",
       fieldErrors: {},
     };
   }

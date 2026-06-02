@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import SereneSailTopbar from "@/app/ui/SereneSailTopbar";
 import CargoFormAdd from "@/app/admin/components/CargoFormAdd";
+
+export const metadata: Metadata = {
+  title: "Admin Cargo | Serena Sail",
+  description: "Halaman admin cargo untuk melakukan CRUD data pengiriman dan ringkasan kinerja.",
+};
 import CargoFormEdit from "@/app/admin/components/CargoFormEdit";
 import CargoTable from "@/app/admin/components/CargoTable";
 import {

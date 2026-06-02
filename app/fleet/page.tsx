@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { fetchVesselData } from "../lib/data";
 import FleetPageClient from "./fleet-page-client";
+
+export const metadata: Metadata = {
+  title: "Fleet | Serena Sail",
+  description: "Halaman fleet menampilkan status dan detail armada dalam tampilan operasional.",
+};
 
 export const revalidate = 0; // Memastikan data dari Neon selalu fresh di setiap request
 

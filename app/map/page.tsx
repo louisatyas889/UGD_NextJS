@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { fetchVesselData } from "../lib/data";
 import MapPageClient from "./map-page-client";
+
+export const metadata: Metadata = {
+  title: "Map | Serena Sail",
+  description: "Tampilan peta interaktif armada untuk memantau posisi kapal dan kondisi rute.",
+};
 
 export const revalidate = 0; 
 

@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import SereneSailTopbar from "@/app/ui/SereneSailTopbar";
 import SecurityAccountsWorkspace from "./security-accounts-workspace";
 import { fetchSecurityLogs, fetchSecurityUsers } from "@/app/lib/admin-panels";
+
+export const metadata: Metadata = {
+  title: "Security Accounts | Serena Sail",
+  description: "Halaman manajemen akun keamanan untuk membuat dan mengatur user Admin atau Standard.",
+};
 
 export const dynamic = "force-dynamic";
 

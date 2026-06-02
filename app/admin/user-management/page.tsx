@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import SereneSailTopbar from "@/app/ui/SereneSailTopbar";
 import UserManagementTable from "./user-management-table";
 import { fetchPersonnelRecords } from "@/app/lib/admin-panels";
+
+export const metadata: Metadata = {
+  title: "User Management | Serena Sail",
+  description: "Halaman direktori staf dan manajemen pengguna internal untuk sistem logistik.",
+};
 
 export const dynamic = "force-dynamic";
 

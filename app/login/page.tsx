@@ -1,6 +1,13 @@
 "use client";
+import type { Metadata } from "next";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+
+export const metadata: Metadata = {
+  title: "Login | Serena Sail",
+  description:
+    "Masuk sebagai Admin atau User untuk mengelola data cargo, keamanan akun, dan akses CRUD.",
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,7 +23,7 @@ export default function LoginPage() {
     if (connecting) return;
 
     if (!id.trim() || !key.trim()) {
-      setError("OPERATOR ID & AUTHORIZATION KEY REQUIRED");
+      setError("User ID dan access key wajib diisi.");
       setStatus("INPUT ERROR");
       setStatusColor("#f87171");
       return;
@@ -38,9 +45,7 @@ export default function LoginPage() {
 
       if (!response.ok) {
         setConnecting(false);
-        setError(data.message || "INVALID OPERATOR ID OR ACCESS KEY");
-        setStatus("ACCESS DENIED");
-        setStatusColor("#ef4444");
+          setError(data.message || "User ID atau access key tidak valid.");
         return;
       }
 
@@ -183,7 +188,7 @@ export default function LoginPage() {
             <div className="modal-sub">Classified intelligence access. Verify credentials.</div>
 
             <div className="field">
-              <span className="field-label">OPERATOR ID</span>
+              <span className="field-label">USER ID</span>
               <div className="input-wrap">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 <input
@@ -198,7 +203,7 @@ export default function LoginPage() {
             </div>
 
             <div className="field">
-              <span className="field-label">AUTHORIZATION KEY</span>
+              <span className="field-label">ACCESS KEY</span>
               <div className="input-wrap">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
                 <input

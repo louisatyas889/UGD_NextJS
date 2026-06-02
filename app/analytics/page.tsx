@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { fetchVesselData } from "../lib/data";
 import AnalyticsPageClient from "./analytics-page-client";
+
+export const metadata: Metadata = {
+  title: "Analytics | Serena Sail",
+  description: "Halaman analytics memberikan metrik armada dan insight logistik terperinci.",
+};
 
 export const revalidate = 0;
 

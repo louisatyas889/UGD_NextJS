@@ -1,9 +1,16 @@
 "use client";
+import type { Metadata } from 'next';
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { TrakingPackages } from './lib/placeholder-data';
+
+export const metadata: Metadata = {
+  title: 'Serena Sail | Beranda',
+  description:
+    'Landing page Serena Sail untuk login Admin/User, pelacakan paket, dan informasi layanan maritim.',
+};
 
 // --- KOMPONEN UI ---
 
@@ -36,7 +43,7 @@ const Navbar = () => (
         href="/login" 
         className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase tracking-widest hover:bg-purple-600 hover:border-purple-500 transition-all duration-300 shadow-[0_0_20px_rgba(168,85,247,0.1)]"
       >
-        Employee Login
+        Login Admin / User
       </Link>
     </div>
   </nav>

@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Orbitron, Rajdhani } from "next/font/google";
 import { lazy, Suspense } from "react";
 import PrimeTopbar from "../../ui/PrimeTopbar";
 import SuspensePanelLoader from "../../ui/suspense-panel-loader";
+
+export const metadata: Metadata = {
+  title: "Vessel Deployment | Serena Sail",
+  description: "Halaman penempatan kapal dan manajemen jadwal deployment armada.",
+};
 
 const DeploymentTable = lazy(() => import("./deployment-table"));
 

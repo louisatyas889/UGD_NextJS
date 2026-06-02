@@ -13,7 +13,10 @@ export async function POST(request: Request) {
 
     if (!operatorId || !accessKey) {
       return NextResponse.json(
-        { message: "Operator ID dan authorization key wajib diisi." },
+        {
+          message:
+            "Form login tidak lengkap. User ID dan access key wajib diisi.",
+        },
         { status: 400 },
       );
     }
@@ -22,7 +25,10 @@ export async function POST(request: Request) {
 
     if (!session) {
       return NextResponse.json(
-        { message: "Operator ID atau authorization key tidak valid." },
+        {
+          message:
+            "User ID atau access key tidak valid. Periksa kembali akun Admin/User Anda.",
+        },
         { status: 401 },
       );
     }

@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Orbitron, Rajdhani } from "next/font/google";
 import PrimeTopbar from "../ui/PrimeTopbar";
+
+export const metadata: Metadata = {
+  title: "Profile | Serena Sail",
+  description: "Halaman profil pengguna yang menampilkan detail sesi dan informasi peran.",
+};
 
 const orbitron = Orbitron({
   subsets: ["latin"],

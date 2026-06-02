@@ -28,6 +28,7 @@ export async function GET() {
     for (const a of dummyAdmins) {
       await sql`INSERT INTO app_users (id, key, name, role, status, avatar) VALUES (${a.id}, ${a.key}, ${a.name}, ${a.role}, ${a.status}, ${a.avatar});`;
     }
+    await sql`INSERT INTO app_users (id, key, name, role, status, avatar) VALUES ('customer-01', 'CUST-1234', 'Customer Akun', 'STANDARD', 'Active', 'C');`;
 
     // NEW: 1.5. Buat dan isi Tabel Master Rute (vessel_routes)
     await sql`

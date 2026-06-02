@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import { Orbitron, Rajdhani, Share_Tech_Mono } from "next/font/google";
 import SereneSailTopbar from "@/app/ui/SereneSailTopbar";
 import FleetLogisticsBoard from "./fleet-logistics-board";
+
+export const metadata: Metadata = {
+  title: "Fleet Logistics | Serena Sail",
+  description: "Halaman logistik armada untuk memantau jalur, status kapal, dan kapasitas pengiriman.",
+};
 import { fetchFleetVessels, fetchTrackingPackagesRecords } from "@/app/lib/admin-panels";
 
 export const dynamic = "force-dynamic";
