@@ -1,13 +1,6 @@
 "use client";
-import type { Metadata } from "next";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
-export const metadata: Metadata = {
-  title: "Login | Serena Sail",
-  description:
-    "Masuk sebagai Admin atau User untuk mengelola data cargo, keamanan akun, dan akses CRUD.",
-};
 
 export default function LoginPage() {
   const router = useRouter();

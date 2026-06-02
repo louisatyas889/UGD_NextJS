@@ -1,3 +1,5 @@
+"use client";
+
 export default function GlobalError({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <main className="min-h-screen bg-[#020617] text-white flex items-center justify-center px-6 py-12">

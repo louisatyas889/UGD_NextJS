@@ -1,16 +1,9 @@
 "use client";
-import type { Metadata } from 'next';
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { TrakingPackages } from './lib/placeholder-data';
-
-export const metadata: Metadata = {
-  title: 'Serena Sail | Beranda',
-  description:
-    'Landing page Serena Sail untuk login Admin/User, pelacakan paket, dan informasi layanan maritim.',
-};
 
 // --- KOMPONEN UI ---
 
