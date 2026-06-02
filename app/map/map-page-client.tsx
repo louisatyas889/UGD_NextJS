@@ -3,9 +3,15 @@ import { useState, useEffect, useRef } from "react";
 import PrimeTopbar from "../ui/PrimeTopbar";
 
 interface Vessel {
-  lat: number;
-  lng: number;
   id: string;
+  subtitle: string;
+  destination: string;
+  status: string;
+  status_color: string;
+  eta: string;
+  eta_color: string;
+  monitoring_icon: string;
+  progress_pct: number;
   speed: string;
   fuel: string;
   diag: string;
@@ -13,54 +19,83 @@ interface Vessel {
   weather: string;
   color: string;
   region: string;
+  current_lat?: number;
+  current_lng?: number;
 }
 
 interface MapPageClientProps {
   dbVessels: Vessel[];
 }
 
-// GEO-MAPPING ROUTER: Koordinat jangkar perairan dunia nyata berdasarkan nama region/hub
 const REGION_COORDINATES: { [key: string]: [number, number] } = {
-  jpn: [35.6764, 139.6500],
-  rotterdam: [51.9244, 4.4777],
-  nld: [52.1326, 5.2913],
-  singapore: [1.3521, 103.8198],
-  sgp: [1.1300, 103.8300],
-  priok: [-6.1014, 106.8841],
-  idn: [-6.1000, 106.8900],
-  tanjung: [-6.1014, 106.8841],
-  suez: [29.9668, 32.5498],
-  egy: [29.9600, 32.5500],
-  mars: [15.0000, 115.0000], // Simulasi di Laut Cina Selatan untuk nama fiksi/antariksa
+  bb: [-2.5236, 106.1858],     
+  sg: [1.3521, 103.8198],      
+  ch: [35.0000, 105.0000],     
+  cn: [31.2304, 121.4737],     
+  th: [15.8700, 100.9925],     
+  ph: [14.5995, 120.9842],     
+  kr: [37.5665, 126.9780],     
+  jp: [35.6762, 139.6503],     
 };
-
-function getAccurateCoordinates(v: Vessel, index: number): [number, number] {
-  const cleanRegion = v.region?.toLowerCase() || "";
-  
-  // 1. Cari apakah string region mengandung salah satu kata kunci jangkar peta kita
-  for (const key in REGION_COORDINATES) {
-    if (cleanRegion.includes(key)) {
-      const [baseLat, baseLng] = REGION_COORDINATES[key];
-      // Berikan sedikit offset acak mikro (jitter) supaya kalau ada 2 kapal ke tujuan sama tidak bertumpuk pas di satu titik
-      return [baseLat + (index * 0.15), baseLng + (index * 0.15)];
-    }
-  }
-
-  // 2. Jika koordinat database valid (bukan 0 atau null), gunakan yang ada
-  if (v.lat && v.lng && v.lat !== 3.0) {
-    return [v.lat, v.lng];
-  }
-
-  // 3. Fallback terakhir: Sebaran perairan Asia-Pasifik acak dinamis agar tidak membentuk garis lurus kaku
-  return [2.0 + (index * 2.8) % 12, 105.0 + (index * 4.3) % 25];
-}
 
 export default function MapPageClient({ dbVessels }: MapPageClientProps) {
   const [time, setTime] = useState("");
+  const [notifications, setNotifications] = useState<{id: string; message: string; type: string}[]>([]);
+  const previousVesselsRef = useRef<Vessel[]>([]);
+
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletRef = useRef<any>(null);
   const markersRef = useRef<{ [key: string]: any }>({});
 
+  function getStaticTargetCoordinates(v: Vessel, index: number): [number, number] {
+    const targetCountry = (v.destination || v.region || "sg").toLowerCase().trim();
+    let baseCoords: [number, number] = [1.3521, 103.8198];
+
+    for (const key in REGION_COORDINATES) {
+      if (targetCountry.includes(key) || targetCountry === key) {
+        baseCoords = REGION_COORDINATES[key];
+        break;
+      }
+    }
+    return [baseCoords[0] + (index * 0.04), baseCoords[1] + (index * 0.04)];
+  }
+
+  // Pemantau Notifikasi Banner
+  useEffect(() => {
+    if (previousVesselsRef.current.length > 0) {
+      dbVessels.forEach((currentVessel) => {
+        const prevVessel = previousVesselsRef.current.find(p => p.id === currentVessel.id);
+        if (prevVessel) {
+          const prevStatus = (prevVessel.status || "").toUpperCase().trim();
+          const currentStatus = (currentVessel.status || "").toUpperCase().trim();
+
+          if (prevStatus !== currentStatus) {
+            if (currentStatus.includes("DELAY")) {
+              triggerNotification(currentVessel.id, `FLEET ${currentVessel.id}: Critical Delay detected. Operating under BAD WEATHER conditions.`, "delay");
+            } else if (currentStatus === "EN RUTE" || currentStatus === "AKTIF") {
+              triggerNotification(currentVessel.id, `FLEET ${currentVessel.id}: Status updated to EN RUTE. Departing from Origin.`, "warn");
+            } else if (currentStatus === "IN PORT" || currentStatus === "ACTIVE") {
+              // FIX: Menghapus teks typo '10 seconds * 1000' yang merusak kompilasi build
+              setTimeout(() => {
+                triggerNotification(currentVessel.id, `ARRIVED // VESSEL ${currentVessel.id} status is now IN PORT.`, "success");
+              }, 10000); 
+            }
+          }
+        }
+      });
+    }
+    previousVesselsRef.current = dbVessels;
+  }, [dbVessels]);
+
+  const triggerNotification = (vesselId: string, message: string, type: string) => {
+    const id = `${vesselId}-${Date.now()}`;
+    setNotifications(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  };
+
+  // Clock Timer
   useEffect(() => {
     const updateTime = () => {
       const n = new Date();
@@ -76,8 +111,14 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
     return () => clearInterval(interval);
   }, []);
 
+  // Leaflet Engine Render
   useEffect(() => {
-    if (typeof window === "undefined" || leafletRef.current) return;
+    if (typeof window === "undefined") return;
+
+    if (leafletRef.current) {
+      leafletRef.current.remove();
+      leafletRef.current = null;
+    }
 
     const link = document.createElement("link");
     link.rel = "stylesheet";
@@ -92,9 +133,8 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
       if (!mapRef.current || (window as any).L === undefined) return;
       const L = (window as any).L;
 
-      // Center map global agak dizoom out sedikit (zoom: 4) agar area dari Eropa ke Jepang kelihatan megah
       const map = L.map(mapRef.current, {
-        center: [15.0, 115.0],
+        center: [10.0, 118.0],
         zoom: 4,
         zoomControl: false,
         attributionControl: false
@@ -104,17 +144,25 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
         maxZoom: 19
       }).addTo(map);
 
-      // MAPPING MARKER DARI DATA DATABASE NEON
       dbVessels.forEach((v, index) => {
-        // Panggil fungsi geo-router pencari koordinat akurat
-        const [finalLat, finalLng] = getAccurateCoordinates(v, index);
+        const [finalLat, finalLng] = getStaticTargetCoordinates(v, index);
+        const cleanStatus = (v.status || "").toUpperCase().trim();
+        
+        // GUNAKAN WARNA KONSISTEN YANG SUDAH DI-MAPPING DARI SERVER HULU (v.color)
+        const themeColor = v.color || "#22d3ee";
+        let statusText = cleanStatus;
+        
+        if (cleanStatus.includes("DELAY")) statusText = "DELAY (BAD WEATHER)";
+        if (cleanStatus.includes("MAINTENANCE") || cleanStatus === "MAINTED") statusText = "MAINTENANCE (DRY DOCK)";
+        if (cleanStatus === "IN PORT" || cleanStatus === "ACTIVE" || cleanStatus === "AKTIF") statusText = "IN PORT (DOCKED)";
 
+        // Render Custom Glow Marker Kapal
         const icon = L.divIcon({
           className: "custom-vessel-icon",
           html: `
             <div class="pulse-wrapper">
-              <div class="pulse-ring" style="border-color: ${v.color}; box-shadow: 0 0 8px ${v.color}"></div>
-              <div class="dot" style="background: ${v.color}; box-shadow: 0 0 12px ${v.color}"></div>
+              <div class="pulse-ring" style="border-color: ${themeColor}; box-shadow: 0 0 8px ${themeColor}"></div>
+              <div class="dot" style="background: ${themeColor}; box-shadow: 0 0 12px ${themeColor}"></div>
             </div>
           `,
           iconSize: [30, 30],
@@ -122,35 +170,28 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
         });
 
         const marker = L.marker([finalLat, finalLng], { icon }).addTo(map);
+        const telemetryLocation = v.region || "SG";
 
         const content = `
-          <div class="prime-popup" style="border-left: 3px solid ${v.color}">
+          <div class="prime-popup" style="border-left: 3px solid ${themeColor}">
             <div class="pop-header">
               <span class="pop-label">LIVE TELEMETRY</span>
               <div class="pop-title-row">
-                <span class="pop-title">${v.id}</span>
-                <span class="pop-tag" style="color: ${v.color}">${v.region}</span>
+                <span class="pop-title" style="color: ${themeColor}">${v.id}</span>
+                <span class="pop-tag" style="color: ${themeColor}">${telemetryLocation}</span>
               </div>
             </div>
             <div class="pop-body">
+              <div class="pop-info"><span>CURRENT STATUS</span> <strong style="color: ${themeColor}">${statusText}</strong></div>
               <div class="pop-info"><span>VECTOR SPEED</span> <strong>${v.speed}</strong></div>
               <div class="pop-info"><span>FUEL LEVEL</span> <strong style="color:#22d3ee">${v.fuel}</strong></div>
               <div class="pop-divider"></div>
-              <div class="pop-info"><span>DIAGNOSTICS</span> <strong style="color:${v.diag === 'NO ISSUES' ? '#4ade80' : '#f87171'}">${v.diag}</strong></div>
-              <div class="pop-footer">
-                <div class="pop-sub">SIGNAL CAPTURE <span>${v.signal}</span></div>
-                <div class="pop-sub">CORE WEATHER <span>${v.weather}</span></div>
-              </div>
+              <div class="pop-info"><span>DIAGNOSTICS</span> <strong style="color:${themeColor}">${v.diag}</strong></div>
             </div>
           </div>
         `;
 
-        marker.bindPopup(content, {
-          className: 'custom-prime-popup',
-          minWidth: 240,
-          closeButton: false
-        });
-
+        marker.bindPopup(content, { className: 'custom-prime-popup', minWidth: 240, closeButton: false });
         markersRef.current[v.id] = marker;
       });
 
@@ -162,20 +203,14 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
 
   const handleFocusVessel = (v: Vessel) => {
     if (!leafletRef.current) return;
-    
-    // Cari index asli kapal untuk mencocokkan koordinat router saat di-flyTo
     const targetIndex = dbVessels.findIndex(item => item.id === v.id);
-    const [finalLat, finalLng] = getAccurateCoordinates(v, targetIndex >= 0 ? targetIndex : 0);
+    const [finalLat, finalLng] = getStaticTargetCoordinates(v, targetIndex >= 0 ? targetIndex : 0);
 
-    leafletRef.current.flyTo([finalLat, finalLng], 6, {
-      animate: true,
-      duration: 1.5
-    });
-    
+    leafletRef.current.flyTo([finalLat, finalLng], 5, { animate: true, duration: 1.2 });
     setTimeout(() => {
       const targetMarker = markersRef.current[v.id];
       if (targetMarker) targetMarker.openPopup();
-    }, 1500);
+    }, 1200);
   };
 
   return (
@@ -187,80 +222,100 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
         .topbar-fixed-wrapper { position: absolute; top: 0; left: 0; width: 100%; z-index: 9999 !important; }
         #map-el { width: 100%; height: 100%; z-index: 1; }
 
-        /* FIX UI SIDEBAR KIRI: Diperkecil dari width 260px ke 210px, font & padding dibuat super taktis minimalis */
-        .hud-sidebar-left { position: absolute; top: 90px; left: 24px; width: 210px; background: rgba(6, 6, 6, 0.45); border: 1px solid rgba(255, 255, 255, 0.05); border-left: 2px solid #22d3ee; backdrop-filter: blur(10px); z-index: 1000; padding: 10px; border-radius: 3px; transition: all 0.3s ease; }
+        /* HUD TOAST CONTAINER */
+        .hud-notification-center { position: absolute; top: 90px; left: 50%; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 8px; width: 400px; pointer-events: none; }
+        .hud-toast { background: rgba(10, 10, 15, 0.85); border: 1px solid rgba(255,255,255,0.05); padding: 10px 14px; border-radius: 2px; font-family: 'Share Tech Mono', monospace; font-size: 10px; color: #fff; backdrop-filter: blur(8px); animation: slideDown 0.3s ease-out; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .hud-toast.success { border-left: 3px solid #a855f7; color: #a855f7; }
+        .hud-toast.delay { border-left: 3px solid #ef4444; color: #ef4444; }
+        .hud-toast.warn { border-left: 3px solid #22d3ee; color: #22d3ee; }
+        @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* HUD SIDEBAR KIRI */
+        .hud-sidebar-left { position: absolute; top: 90px; left: 24px; width: 210px; background: rgba(6, 6, 6, 0.6); border: 1px solid rgba(255, 255, 255, 0.05); border-left: 2px solid #22d3ee; backdrop-filter: blur(10px); z-index: 1000; padding: 10px; border-radius: 3px; transition: all 0.3s ease; }
         .hud-title { font-family: 'Orbitron', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: #fff; margin-bottom: 10px; display: flex; justify-content: space-between; }
-        
-        /* ADJUSTMENT COMPACT VESSEL CARD */
         .vessel-tactical-card { background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.02); padding: 6px 8px; margin-bottom: 5px; cursor: pointer; transition: all 0.2s ease; font-family: 'Rajdhani', sans-serif; }
         .vessel-tactical-card:hover { background: rgba(34, 211, 238, 0.08); border-color: rgba(34, 211, 238, 0.25); transform: translateX(3px); }
-
-        /* FIX ERROR TERMINAL: Pastikan properti flexbox ditulis camelCase dengan benar */
-        .card-row { display: flex; justifyContent: space-between; align-items: center; }
         .card-id { font-family: 'Orbitron', sans-serif; font-size: 10px; font-weight: 700; }
-        .card-meta { font-family: 'Share Tech Mono', monospace; font-size: 8px; }
 
-        /* FIX UI SIDEBAR KANAN: Penyesuaian sinkronisasi */
-        .hud-sidebar-right { position: absolute; top: 90px; right: 24px; width: 230px; background: rgba(6, 6, 6, 0.45); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); z-index: 1000; padding: 10px; border-radius: 3px; font-family: 'Share Tech Mono', monospace; }
+        /* HUD SIDEBAR KANAN */
+        .hud-sidebar-right { position: absolute; top: 90px; right: 24px; width: 230px; background: rgba(6, 6, 6, 0.6); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); z-index: 1000; padding: 10px; border-radius: 3px; font-family: 'Share Tech Mono', monospace; }
 
+        /* CIRCLE WAVE ANIMATION */
         .pulse-wrapper { position: relative; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
         .pulse-ring { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 1.5px solid; animation: pulse 2s infinite; opacity: 0; }
         .dot { width: 8px; height: 8px; border-radius: 50%; z-index: 2; }
         @keyframes pulse { 0% { transform: scale(0.5); opacity: 1; } 100% { transform: scale(2.2); opacity: 0; } }
 
+        /* LEAFLET PRIME PANEL POPUP */
         .custom-prime-popup .leaflet-popup-content-wrapper { background: #0a0a0f !important; color: #fff !important; border-radius: 2px !important; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 0 25px rgba(0,0,0,0.9); padding: 0 !important; }
         .custom-prime-popup .leaflet-popup-content { margin: 0 !important; width: 240px !important; }
         .custom-prime-popup .leaflet-popup-tip { display: none; }
         
         .prime-popup { padding: 14px; font-family: 'Rajdhani', sans-serif; }
         .pop-label { font-family: 'Share Tech Mono'; font-size: 8px; color: #4b5563; letter-spacing: 2px; display: block; }
-        .pop-title-row { display: flex; justifyContent: space-between; align-items: center; margin-top: 4px; }
+        .pop-title-row { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
         .pop-title { font-family: 'Orbitron'; font-size: 12px; font-weight: 800; color: #fff; letter-spacing: 0.05em; }
         .pop-tag { font-family: 'Share Tech Mono'; font-size: 8px; font-weight: 600; }
         .pop-body { margin-top: 10px; }
-        .pop-info { display: flex; justifyContent: space-between; font-size: 10px; margin-bottom: 4px; color: #9ca3af; }
+        .pop-info { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; color: #9ca3af; }
         .pop-info strong { color: #fff; font-family: 'Share Tech Mono'; font-weight: 400; }
         .pop-divider { height: 1px; background: rgba(255,255,255,0.04); margin: 8px 0; }
-        .pop-footer { margin-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 6px; }
-        .pop-sub { display: flex; justifyContent: space-between; font-size: 8px; color: #4b5563; font-family: 'Share Tech Mono'; margin-bottom: 2px; }
-        .pop-sub span { color: #e5e7eb; }
 
-        .status-bar { position: absolute; bottom: 0; width: 100%; height: 26px; background: #030303; z-index: 1000; border-top: 1px solid rgba(255,255,255,0.02); display: flex; align-items: center; padding: 0 24px; font-family: 'Share Tech Mono'; font-size: 8px; color: #4b5563; justifyContent: space-between; letter-spacing: 0.05em; }
+        .status-bar { position: absolute; bottom: 0; width: 100%; height: 26px; background: #030303; z-index: 1000; border-top: 1px solid rgba(255,255,255,0.02); display: flex; align-items: center; padding: 0 24px; font-family: 'Share Tech Mono'; font-size: 8px; color: #4b5563; justify-content: space-between; letter-spacing: 0.05em; }
       `}</style>
 
       <div className="topbar-fixed-wrapper">
         <PrimeTopbar />
       </div>
 
-      {/* SIDEBAR KIRI (ACTIVE TELEMETRY) */}
+      {/* CENTER HUD NOTIFICATION */}
+      <div className="hud-notification-center">
+        {notifications.map(n => (
+          <div key={n.id} className={`hud-toast ${n.type}`}>
+            {n.type === "delay" ? "[⛈️ BAD WEATHER] " : n.type === "warn" ? "[📡 VOYAGE DEPARTURE] " : "[⚓ PORT ARRIVAL] "} {n.message}
+          </div>
+        ))}
+      </div>
+
+      {/* SIDEBAR MONITORING KIRI */}
       <div className="hud-sidebar-left">
         <div className="hud-title">
-          <span>ACTIVE TELEMETRY</span>
+          <span>ACTIVE FLEETS</span>
           <span style={{ color: "#22d3ee" }}>{dbVessels.length} UNITS</span>
         </div>
         <div style={{ maxHeight: "calc(100vh - 200px)", overflowY: "auto", paddingRight: "2px" }}>
-          {dbVessels.map((v) => (
-            <div key={v.id} className="vessel-tactical-card" onClick={() => handleFocusVessel(v)}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span className="card-id" style={{ color: v.color }}>{v.id}</span>
-                <span className="card-meta" style={{ color: v.diag.includes('NO ISSUES') ? '#4ade80' : '#f87171' }}>
-                  {v.diag.includes('NO ISSUES') ? 'OK' : 'WARN'}
-                </span>
+          {dbVessels.map((v) => {
+            const cleanStatus = (v.status || "").toUpperCase().trim();
+            const isEnRute = cleanStatus === "EN RUTE" || cleanStatus === "AKTIF";
+            const themeColor = v.color || "#22d3ee"; 
+
+            return (
+              <div key={v.id} className="vessel-tactical-card" onClick={() => handleFocusVessel(v)}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="card-id" style={{ color: themeColor }}>{v.id}</span>
+                  <span className="card-meta" style={{ 
+                    color: themeColor, 
+                    fontSize: '7px', border: `1px solid ${themeColor}40`, padding: '1px 3px' 
+                  }}>
+                    {cleanStatus}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
+                  <span style={{ fontSize: "9px", color: "#9ca3af", maxWidth: "110px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {isEnRute ? "Origin: Indonesia" : `Region: ${v.region}`}
+                  </span>
+                  <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: "9px", color: "#fff" }}>{v.speed}</span>
+                </div>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
-                <span style={{ fontSize: "9px", color: "#9ca3af", maxWidth: "110px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {v.region}
-                </span>
-                <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: "9px", color: "#fff" }}>{v.speed}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
+      {/* LEAFLET COMPONENT CONTAINER */}
       <div id="map-el" ref={mapRef} />
 
-      {/* SIDEBAR KANAN */}
+      {/* SIDEBAR DETAIL KANAN */}
       <div className="hud-sidebar-right">
         <div style={{ color: "#22d3ee", fontSize: "8px", letterSpacing: "1px", marginBottom: "4px" }}>REAL-TIME GPS SAT_TRACK</div>
         <div style={{ color: "#fff", fontSize: "11px", fontWeight: "bold", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "6px", marginBottom: "10px" }}>
@@ -271,23 +326,16 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
             <span>ORBITER ST:</span><span style={{ color: "#4ade80" }}>CONNECTED</span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-            <span>MAP RESOLUTION:</span><span>WGS84_MERCATOR</span>
-          </div>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span>SYS LATENCY:</span><span style={{ color: "#22d3ee" }}>14 MS</span>
           </div>
-        </div>
-
-        <div style={{ background: "rgba(248,113,113,0.02)", borderLeft: "2px solid #f87171", padding: "6px", fontSize: "8px", color: "#9ca3af" }}>
-          <span style={{ color: "#f87171", fontWeight: "bold" }}>ALERT //</span> PACIFIC REGION HAS HIGH PRESSURE WEATHER SYSTEM.
         </div>
       </div>
 
       <div className="status-bar">
         <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-          <div>... MAIN SYSTEM: ONLINE // DATA_SOURCE: NEON_DATABASE</div>
-          <div style={{ color: "#22d3ee" }}>NEON FLEET CONTROLLER V2.0</div>
+          <div>... MAIN GPS ENGINE: ACTIVE // CLEAN STATIC MODE: ENABLED</div>
+          <div style={{ color: "#22d3ee" }}>NEON FLEET CONTROLLER V2.5</div>
         </div>
       </div>
     </div>

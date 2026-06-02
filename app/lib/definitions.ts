@@ -86,3 +86,21 @@ export type InvoiceForm = {
   amount: number;
   status: 'pending' | 'paid';
 };
+
+// Tambahkan ini di paling bawah file definitions.ts
+
+export type VesselData = {
+  id: string;
+  status: string;
+  current_lat: number;
+  current_lng: number;
+  speed: string;
+  fuel: number; // atau string, sesuaikan dengan DB kamu
+  signal: string;
+  eta: string;
+  weather: string; // Format "12.4|1.8"
+  progress_pct: number;
+  color: string;
+  destination: string;
+  jalur_koordinat: [number, number][]; // Array of coordinate pairs
+};

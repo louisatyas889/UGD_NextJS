@@ -7,28 +7,25 @@ function getFleetSql() {
   return getSql();
 }
 
-// Fungsi bantuan untuk menentukan warna berdasarkan status kapal
 function getVesselColors(status: string) {
   const lowerStatus = status.toLowerCase().trim();
   
-  let statusColor = "#a855f7"; // Default MAINTENANCE (Purple)
-  let etaColor = "#e5e7eb";     // Default teks ETA (Abu-abu terang)
+  let statusColor = "#a855f7";
+  let etaColor = "#e5e7eb";
 
   if (lowerStatus.includes("en route") || lowerStatus === "en route") {
-    statusColor = "#22d3ee"; // Cyan
-    etaColor = "#e5e7eb";
+    statusColor = "#22d3ee";
   } else if (lowerStatus.includes("delay") || lowerStatus.includes("delayed")) {
-    statusColor = "#f87171"; // Red
-    etaColor = "#f87171";    // Teks ETA ikut merah kalau delay
+    statusColor = "#f87171";
+    etaColor = "#f87171";
   } else if (lowerStatus.includes("port") || lowerStatus.includes("in port") || lowerStatus.includes("docked")) {
-    statusColor = "#6b7280"; // Muted Gray
-    etaColor = "#e5e7eb";
+    statusColor = "#6b7280";
   }
 
   return { statusColor, etaColor };
 }
 
-// 1. CREATE: Menambah Kapal Baru
+// 1. CREATE
 export async function createVessel(formData: FormData) {
   const id = (formData.get("id") as string)?.toUpperCase();
   const destination = formData.get("destination") as string;
@@ -36,14 +33,13 @@ export async function createVessel(formData: FormData) {
   const etaInput = formData.get("eta") as string;
   const monitoring_icon = formData.get("monitoring_icon") as string || 'chart';
 
-  if (!id || !destination) return { error: "ID dan Tujuan wajib diisi" };
+  if (!id || !destination) return { success: false, error: "ID dan Tujuan wajib diisi" };
 
   const { statusColor, etaColor } = getVesselColors(status);
 
-  // Hitung Auto-ETA jika statusnya EN ROUTE dan inputnya kosong/--
   const generateAutoEta = () => {
     const arrival = new Date();
-    const randomHours = Math.floor(Math.random() * 8) + 4; // Tambah 4 sampai 12 jam ke depan
+    const randomHours = Math.floor(Math.random() * 8) + 4;
     arrival.setHours(arrival.getHours() + randomHours);
     return arrival.toLocaleDateString("id-ID", { 
       day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
@@ -64,11 +60,11 @@ export async function createVessel(formData: FormData) {
     return { success: true };
   } catch (err) {
     console.error("Error at createVessel:", err);
-    return { error: "Gagal menambahkan data kapal." };
+    return { success: false, error: "Gagal menyimpan data ke database." };
   }
 }
 
-// 2. UPDATE: Mengedit Kapal yang Ada dengan Fitur Auto-ETA
+// 2. UPDATE
 export async function updateVessel(formData: FormData) {
   const id = formData.get("id") as string;
   const destination = formData.get("destination") as string;
@@ -76,12 +72,13 @@ export async function updateVessel(formData: FormData) {
   const etaInput = formData.get("eta") as string;
   const monitoring_icon = formData.get("monitoring_icon") as string || 'chart';
 
+  if (!id) return { success: false, error: "ID kapal tidak ditemukan." };
+
   const { statusColor, etaColor } = getVesselColors(status);
 
-  // Fungsi pembuat ETA otomatis (waktu sekarang + 4 s.d 12 jam ke depan)
   const generateAutoEta = () => {
     const arrival = new Date();
-    const randomHours = Math.floor(Math.random() * 8) + 4; 
+    const randomHours = Math.floor(Math.random() * 8) + 4;
     arrival.setHours(arrival.getHours() + randomHours);
     return arrival.toLocaleDateString("id-ID", { 
       day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
@@ -89,22 +86,14 @@ export async function updateVessel(formData: FormData) {
   };
 
   try {
-    // Ambil data kapal saat ini di database agar nilai lama aman
-    const [currentVessel] = await getFleetSql()`SELECT eta FROM fleet_vessels WHERE id = ${id}`;
-    
     let finalEta;
-    
-    // LOGIKA OTOMATISASI ETA:
     if (status.toLowerCase().includes("en route")) {
-      // Jika status diganti/tetap EN ROUTE, dan input form kosong atau berkarakter "--" / "AUTO ETA"
       if (!etaInput || etaInput.trim() === "" || etaInput.trim() === "--" || etaInput.trim() === "AUTO ETA") {
-        finalEta = generateAutoEta(); // Hitung waktu otomatis yang baru
+        finalEta = generateAutoEta();
       } else {
-        finalEta = etaInput; // Jika user sengaja mengetik manual, pakai ketikan user
+        finalEta = etaInput;
       }
     } else {
-      // Jika statusnya BUKAN en route (misal: PORT atau MAINTENANCE)
-      // Gunakan input baru jika ada, kalau tidak ada kembali ke data lama atau '--'
       finalEta = etaInput && etaInput.trim() !== "" && etaInput.trim() !== "AUTO ETA" ? etaInput : '--';
     }
 
@@ -124,12 +113,14 @@ export async function updateVessel(formData: FormData) {
     return { success: true };
   } catch (err) {
     console.error("Error at updateVessel:", err);
-    return { error: "Gagal memperbarui data kapal." };
+    return { success: false, error: "Gagal memperbarui data di database." };
   }
 }
 
-// 3. DELETE: Menghapus Kapal
+// 3. DELETE
 export async function deleteVessel(id: string) {
+  if (!id) return { success: false, error: "ID tidak valid." };
+
   try {
     await getFleetSql()`DELETE FROM fleet_vessels WHERE id = ${id}`;
     revalidatePath("/fleet");
@@ -137,6 +128,6 @@ export async function deleteVessel(id: string) {
     return { success: true };
   } catch (err) {
     console.error("Error at deleteVessel:", err);
-    return { error: "Gagal menghapus data kapal." };
+    return { success: false, error: "Gagal menghapus data kapal." };
   }
 }

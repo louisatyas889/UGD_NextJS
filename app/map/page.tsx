@@ -1,49 +1,55 @@
 import { fetchVesselData } from "../lib/data";
 import MapPageClient from "./map-page-client";
 
-export const revalidate = 0; // Memastikan data koordinat selalu real-time
+export const revalidate = 0; 
 
 export default async function MapPage() {
-  // 1. Ambil data asli kapal dari database Neon
-  const vesselsFromDb = await fetchVesselData();
+  // Ambil data mentah dari database Neon
+  const vesselsFromDb = await fetchVesselData() || [];
 
-  // 2. Petakan kolom database agar sesuai dengan kebutuhan peta komponen client
-  const initialVessels = (vesselsFromDb || []).map((v: any, index: number) => {
-    
-    // Gunakan status_color langsung dari Neon yang sudah kita perbaiki di actions.ts
-    // Jika data lama belum ada warnanya, baru kita fallback ke logic pencocokan warna string
-    const lowerStatus = v.status?.toLowerCase() || "";
-    let statusColor = v.status_color;
-    
-    if (!statusColor) {
-      if (lowerStatus.includes("en route") || lowerStatus.includes("enroute")) {
-        statusColor = "#22d3ee"; // Cyan
-      } else if (lowerStatus.includes("delay") || lowerStatus.includes("delayed")) {
-        statusColor = "#f87171"; // Red
-      } else if (lowerStatus.includes("port") || lowerStatus.includes("docked") || lowerStatus.includes("inport")) {
-        statusColor = "#10b981"; // Green
-      } else {
-        statusColor = "#a855f7"; // Default purple (maint)
-      }
+  // 1. Hilangkan duplikasi kapal menggunakan metode filter yang aman
+  const uniqueVesselsMap = vesselsFromDb.filter((vessel, index, self) =>
+    index === self.findIndex((t) => t.id === vessel.id)
+  );
+
+  // 2. Mapping data yang bersih untuk dikirim ke MapPageClient
+  const initialVessels = uniqueVesselsMap.map((v: any, index: number) => {
+    const lowerStatus = (v.status || "").toLowerCase().trim();
+
+    // --- SINKRONISASI WARNA UTAMA BERDASARKAN STATUS (FIXED) ---
+    let finalColor = "#22d3ee"; // Default: Cyan (EN RUTE / AKTIF)
+    let diagnosticsStatus = "NO ISSUES";
+
+    if (lowerStatus.includes("maintenance") || lowerStatus === "mainted") {
+      finalColor = "#9ca3af";        // Abu-abu untuk Maintenance
+      diagnosticsStatus = "UNDER REPAIR";
+    } else if (lowerStatus.includes("delay")) {
+      finalColor = "#ef4444";        // MERAH MENYALA untuk Delay 🚨
+      diagnosticsStatus = "WEATHER DELAY";
+    } else if (lowerStatus === "in port" || lowerStatus === "active" || lowerStatus === "aktif") {
+      finalColor = "#a855f7";        // Ungu untuk In Port
     }
 
     return {
-      id: v.id || `UNKNOWN-${index}`,
-      
-      // PENTING: Set ke 0 agar mengaktifkan fitur pencarian otomatis berbasis teks negara/hub di Client Component
-      lat: 0, 
-      lng: 0,
-      
+      id: String(v.id || `UNKNOWN-${index}`),
       speed: v.speed || "21.4 Knots",
       fuel: v.fuel || "84%",
-      diag: v.status?.toUpperCase() === "MAINTENANCE" ? "UNDER REPAIR" : "NO ISSUES",
+      diag: diagnosticsStatus, 
       signal: v.signal || "98%",
-      weather: v.weather || "OPTIMAL",
-      color: statusColor,
-      region: v.destination || "UNKNOWN REGION", // Menggunakan kolom destination sebagai penggerak utama Geo-Router
+      weather: lowerStatus.includes("delay") ? "BAD WEATHER" : "OPTIMAL",
+      color: finalColor,             
+      region: String(v.region || v.destination || "SG"), 
+
+      subtitle: String(v.subtitle || v.id || "Cargo Vessel"),
+      destination: String(v.destination || "UNKNOWN"),
+      status: String(v.status || "UNKNOWN"),
+      status_color: finalColor,      
+      eta: String(v.eta || "N/A"),
+      eta_color: String(v.eta_color || "#ffffff"),
+      monitoring_icon: String(v.monitoring_icon || "chart"),
+      progress_pct: Number(v.progress_pct) || 0,
     };
   });
 
-  // 3. Oper data dari Neon langsung ke Client Component Peta
-  return <MapPageClient dbVessels={initialVessels} />;
+  return <MapPageClient dbVessels={initialVessels as any} />;
 }

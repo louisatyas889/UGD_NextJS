@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-// Mengambil data dummy dari file placeholder-data Anda
 import { users, dummyAdmins, vessels4, fleetPersonnel, TrakingPackages } from '../lib/placeholder-data';
 import { getSql } from '../lib/db';
 
@@ -30,7 +29,54 @@ export async function GET() {
       await sql`INSERT INTO app_users (id, key, name, role, status, avatar) VALUES (${a.id}, ${a.key}, ${a.name}, ${a.role}, ${a.status}, ${a.avatar});`;
     }
 
-    // 2. Buat dan isi Tabel Kapal (Vessels)
+    // NEW: 1.5. Buat dan isi Tabel Master Rute (vessel_routes)
+    await sql`
+      CREATE TABLE IF NOT EXISTS vessel_routes (
+        id SERIAL PRIMARY KEY,
+        asal VARCHAR(100) DEFAULT 'Bangka Belitung',
+        negara_tujuan VARCHAR(100) NOT NULL,
+        nomor_rute INTEGER CHECK (nomor_rute IN (1, 2, 3)),
+        status_rute VARCHAR(50) DEFAULT 'safe',
+        jalur_koordinat JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await sql`TRUNCATE TABLE vessel_routes CASCADE;`;
+
+    // Pengisian 3 alternatif rute untuk masing-masing 7 negara tujuan dari Bangka Belitung
+    await sql`
+      INSERT INTO vessel_routes (negara_tujuan, nomor_rute, status_rute, jalur_koordinat) VALUES
+      ('Singapura', 1, 'safe', '[[-2.13, 106.12], [-0.5, 105.2], [1.13, 103.83]]'),
+      ('Singapura', 2, 'congested', '[[-2.13, 106.12], [-0.8, 104.5], [1.10, 103.75]]'),
+      ('Singapura', 3, 'safe', '[[-2.13, 106.12], [-0.2, 105.8], [1.15, 103.90]]'),
+
+      ('Malaysia', 1, 'safe', '[[-2.13, 106.12], [1.13, 103.83], [2.2, 102.2], [3.0, 101.39]]'),
+      ('Malaysia', 2, 'safe', '[[-2.13, 106.12], [0.5, 103.5], [1.8, 101.9], [3.0, 101.39]]'),
+      ('Malaysia', 3, 'weather_alert', '[[-2.13, 106.12], [1.5, 104.8], [2.8, 103.2], [3.0, 101.39]]'),
+
+      ('Thailand', 1, 'safe', '[[-2.13, 106.12], [2.0, 105.0], [6.0, 102.5], [10.0, 100.5], [13.09, 100.90]]'),
+      ('Thailand', 2, 'safe', '[[-2.13, 106.12], [3.5, 107.0], [7.5, 104.0], [11.2, 101.5], [13.09, 100.90]]'),
+      ('Thailand', 3, 'safe', '[[-2.13, 106.12], [1.13, 103.83], [4.0, 100.0], [8.0, 98.5], [13.09, 100.90]]'),
+
+      ('Filipina', 1, 'safe', '[[-2.13, 106.12], [4.0, 112.0], [9.0, 117.0], [14.59, 120.98]]'),
+      ('Filipina', 2, 'safe', '[[-2.13, 106.12], [2.5, 109.5], [7.0, 114.2], [12.0, 120.0], [14.59, 120.98]]'),
+      ('Filipina', 3, 'blocked', '[[-2.13, 106.12], [5.5, 115.0], [10.2, 122.0], [14.59, 120.98]]'),
+
+      ('China', 1, 'safe', '[[-2.13, 106.12], [5.0, 110.0], [12.0, 113.0], [22.31, 114.16]]'),
+      ('China', 2, 'safe', '[[-2.13, 106.12], [3.0, 108.0], [15.0, 116.0], [22.31, 114.16]]'),
+      ('China', 3, 'weather_alert', '[[-2.13, 106.12], [6.0, 115.0], [16.0, 119.0], [22.31, 114.16]]'),
+
+      ('Jepang', 1, 'safe', '[[-2.13, 106.12], [10.0, 120.0], [20.0, 125.0], [30.0, 135.0], [35.67, 139.65]]'),
+      ('Jepang', 2, 'safe', '[[-2.13, 106.12], [5.0, 115.0], [18.0, 130.0], [28.0, 130.0], [35.67, 139.65]]'),
+      ('Jepang', 3, 'safe', '[[-2.13, 106.12], [15.0, 118.0], [25.0, 122.0], [32.0, 128.0], [35.67, 139.65]]'),
+
+      ('Korea Selatan', 1, 'safe', '[[-2.13, 106.12], [12.0, 115.0], [24.0, 121.0], [31.0, 125.0], [35.17, 129.07]]'),
+      ('Korea Selatan', 2, 'safe', '[[-2.13, 106.12], [8.0, 112.0], [22.0, 119.0], [33.0, 127.0], [35.17, 129.07]]'),
+      ('Korea Selatan', 3, 'safe', '[[-2.13, 106.12], [4.0, 118.0], [18.0, 124.0], [29.0, 124.0], [35.17, 129.07]]');
+    `;
+
+    // 2. Buat dan isi Tabel Kapal (Vessels) - UPDATE: Tambah field pendukung peta interaktif
     await sql`
       CREATE TABLE IF NOT EXISTS fleet_vessels (
         id VARCHAR(50) PRIMARY KEY,
@@ -42,22 +88,51 @@ export async function GET() {
         eta_color VARCHAR(20),
         monitoring_icon VARCHAR(20),
         progress_pct INTEGER NOT NULL DEFAULT 0,
+        
+        -- Kolom Tambahan Sinkronisasi Telemetri UI Map Anda
+        speed VARCHAR(20) DEFAULT '0 knots',
+        fuel VARCHAR(20) DEFAULT '100%',
+        diag VARCHAR(50) DEFAULT 'NO ISSUES',
+        signal VARCHAR(50) DEFAULT 'STRONG',
+        weather VARCHAR(50) DEFAULT 'CLEAR',
+        color VARCHAR(20) DEFAULT '#22d3ee',
+        region VARCHAR(50) DEFAULT 'Bangka Belitung',
+        current_lat DOUBLE PRECISION DEFAULT -2.1300,
+        current_lng DOUBLE PRECISION DEFAULT 106.1200,
+        route_id INTEGER,
+
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `;
+    
+    // Melakukan alter penambahan kolom baru jika tabel sudah terlanjur ada di database Neon Anda
     await sql`
       ALTER TABLE fleet_vessels
       ADD COLUMN IF NOT EXISTS subtitle VARCHAR(80) NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS progress_pct INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS speed VARCHAR(20) DEFAULT '22 knots',
+      ADD COLUMN IF NOT EXISTS fuel VARCHAR(20) DEFAULT '85%',
+      ADD COLUMN IF NOT EXISTS diag VARCHAR(50) DEFAULT 'NO ISSUES',
+      ADD COLUMN IF NOT EXISTS signal VARCHAR(50) DEFAULT 'STRONG',
+      ADD COLUMN IF NOT EXISTS weather VARCHAR(50) DEFAULT 'CLEAR',
+      ADD COLUMN IF NOT EXISTS color VARCHAR(20) DEFAULT '#22d3ee',
+      ADD COLUMN IF NOT EXISTS region VARCHAR(50) DEFAULT 'Bangka Belitung',
+      ADD COLUMN IF NOT EXISTS current_lat DOUBLE PRECISION DEFAULT -2.1300,
+      ADD COLUMN IF NOT EXISTS current_lng DOUBLE PRECISION DEFAULT 106.1200,
+      ADD COLUMN IF NOT EXISTS route_id INTEGER,
       ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
     `;
+
     await sql`TRUNCATE TABLE fleet_vessels CASCADE;`;
+
     for (const v of vessels4) {
+      // Menghasilkan koordinat awal default (Bangka Belitung) untuk posisi awal live-map kapal
       await sql`
         INSERT INTO fleet_vessels (
-          id, subtitle, destination, status, status_color, eta, eta_color, monitoring_icon, progress_pct
+          id, subtitle, destination, status, status_color, eta, eta_color, monitoring_icon, progress_pct,
+          speed, fuel, diag, signal, weather, color, region, current_lat, current_lng
         )
         VALUES (
           ${v.id},
@@ -68,10 +143,27 @@ export async function GET() {
           ${"etaValue"},
           ${"#e5e7eb"},
           ${"chart"},
-          ${v.pct}
+          ${v.pct},
+          '24.5 knots',    -- Contoh data dummy telemetri map
+          '82%',
+          'NO ISSUES',
+          'MAX SIGNAL',
+          'FAVORABLE',
+          '#22d3ee',      -- Hex warna default marker berpendar di peta
+          ${v.dest},       -- Menyinkronkan region dengan destinasi tujuan
+          -2.1300,         -- Titik Awal Bujur Bangka Belitung
+          106.1200         -- Titik Awal Lintang Bangka Belitung
         );
       `;
     }
+
+    // OTOMATISASI LINKING: Menyambungkan route_id kapal secara otomatis ke Rute Nomor 1 berdasarkan kesamaan nama negara tujuan
+    await sql`
+      UPDATE fleet_vessels f
+      SET route_id = r.id
+      FROM vessel_routes r
+      WHERE LOWER(f.destination) = LOWER(r.negara_tujuan) AND r.nomor_rute = 1;
+    `;
 
     // 3. Buat dan isi Tabel Personel (Fleet Personnel)
     await sql`
@@ -105,24 +197,10 @@ export async function GET() {
     for (const person of fleetPersonnel) {
       await sql`
         INSERT INTO fleet_personnel (
-          id,
-          name,
-          work_shift,
-          job_title,
-          start_hour,
-          end_hour,
-          working_hours,
-          assigned_vessel
+          id, name, work_shift, job_title, start_hour, end_hour, working_hours, assigned_vessel
         )
         VALUES (
-          ${person.id},
-          ${person.name},
-          ${person.workShift},
-          ${person.jobTitle},
-          ${person.startHour},
-          ${person.endHour},
-          ${person.workingHours},
-          ${person.assignedVessel}
+          ${person.id}, ${person.name}, ${person.workShift}, ${person.jobTitle}, ${person.startHour}, ${person.endHour}, ${person.workingHours}, ${person.assignedVessel}
         );
       `;
     }
@@ -172,7 +250,7 @@ export async function GET() {
         ('Sarah Jenkins', 'ENGINE ROOM', 'SECURE', 'Engine room diagnostics package synchronized.', '#22d3ee', '11:48:19')
     `;
 
-    return NextResponse.json({ message: 'Database Neon berhasil diisi dengan data dummy!' });
+    return NextResponse.json({ message: 'Database Neon berhasil diisi dengan master rute internasional dan data dummy telemetri map!' });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
