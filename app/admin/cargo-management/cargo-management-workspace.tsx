@@ -16,6 +16,10 @@ import {
 } from "@/app/lib/cargo-types";
 import DataSearchInput from "@/app/ui/data-search-input";
 
+// Price limit constants
+const MIN_PRICE = 1000;
+const MAX_PRICE = 999999999;
+
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -34,6 +38,23 @@ function formatDate(date: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(date));
+}
+
+function getMinDate(): string {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getMaxDate(): string {
+  const maxDate = new Date();
+  maxDate.setDate(maxDate.getDate() + 365);
+  const year = maxDate.getFullYear();
+  const month = String(maxDate.getMonth() + 1).padStart(2, "0");
+  const day = String(maxDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 type CargoApiResponse = {
@@ -160,7 +181,11 @@ export default function CargoManagementWorkspace() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [statusMessage, setStatusMessage] = useState("Sinkronisasi database aktif.");
+  const [validationError, setValidationError] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  const minDate = getMinDate();
+  const maxDate = getMaxDate();
 
   async function loadRecords(query = "") {
     setIsLoading(true);
@@ -196,20 +221,65 @@ export default function CargoManagementWorkspace() {
     setEditingId(null);
     setStatusMessage(nextMessage);
     setErrorMessage("");
+    setValidationError("");
   }
 
   function handleFieldChange<K extends keyof CargoFormData>(
     field: K,
     value: CargoFormData[K],
   ) {
+    // Clear validation error when user starts typing
+    if (validationError) {
+      setValidationError("");
+    }
+
+    // Validate price field in real-time
+    if (field === "shippingPrice") {
+      const priceValue = Number(value);
+      if (value !== "" && !isNaN(priceValue)) {
+        if (priceValue < MIN_PRICE) {
+          setValidationError(`Tarif pengiriman minimal Rp ${formatCurrency(MIN_PRICE)}`);
+        } else if (priceValue > MAX_PRICE) {
+          setValidationError(`Tarif pengiriman maksimal Rp ${formatCurrency(MAX_PRICE)}`);
+        }
+      }
+    }
+
     setFormData((current) => ({
       ...current,
       [field]: value,
     }));
   }
 
+  function validateForm(): boolean {
+    const price = Number(formData.shippingPrice);
+
+    if (!formData.shippingDate) {
+      setValidationError("Tanggal kirim wajib diisi.");
+      return false;
+    }
+
+    if (isNaN(price) || price < MIN_PRICE) {
+      setValidationError(`Tarif pengiriman minimal Rp ${formatCurrency(MIN_PRICE)}`);
+      return false;
+    }
+
+    if (price > MAX_PRICE) {
+      setValidationError(`Tarif pengiriman maksimal Rp ${formatCurrency(MAX_PRICE)}`);
+      return false;
+    }
+
+    return true;
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    // Validate before submitting
+    if (!validateForm()) {
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage("");
 
@@ -281,6 +351,7 @@ export default function CargoManagementWorkspace() {
     setFormData(buildFormDataFromRecord(record));
     setStatusMessage(`Mode edit aktif untuk resi ${record.trackingNumber}.`);
     setErrorMessage("");
+    setValidationError("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -363,6 +434,11 @@ export default function CargoManagementWorkspace() {
           {errorMessage ? (
             <p style={{ color: "#fda4af", marginTop: "10px", fontSize: "13px" }}>
               {errorMessage}
+            </p>
+          ) : null}
+          {validationError ? (
+            <p style={{ color: "#fbbf24", marginTop: "10px", fontSize: "13px" }}>
+              ⚠️ {validationError}
             </p>
           ) : null}
         </div>
@@ -522,14 +598,19 @@ export default function CargoManagementWorkspace() {
             </label>
 
             <label>
-              <span style={labelStyle}>Tanggal Kirim</span>
+              <span style={labelStyle}>Tanggal Kirim *</span>
               <input
                 onChange={(event) => handleFieldChange("shippingDate", event.target.value)}
                 required
                 style={inputStyle}
                 type="date"
                 value={formData.shippingDate}
+                min={minDate}
+                max={maxDate}
               />
+              <span style={{ fontSize: "11px", color: "#64748b" }}>
+                Hari ini - {maxDate.split("-").reverse().join("/")}
+              </span>
             </label>
 
             <label>
@@ -623,16 +704,21 @@ export default function CargoManagementWorkspace() {
             </label>
 
             <label>
-              <span style={labelStyle}>Tarif Pengiriman</span>
+              <span style={labelStyle}>Tarif Pengiriman *</span>
               <input
-                min="0"
+                min={MIN_PRICE}
+                max={MAX_PRICE}
                 onChange={(event) => handleFieldChange("shippingPrice", event.target.value)}
                 required
                 step="1000"
                 style={inputStyle}
                 type="number"
                 value={formData.shippingPrice}
+                placeholder="1000 - 999999999"
               />
+              <span style={{ fontSize: "11px", color: "#64748b" }}>
+                Min: Rp {formatCurrency(MIN_PRICE)} | Max: Rp {formatCurrency(MAX_PRICE)}
+              </span>
             </label>
 
             <label>
@@ -798,21 +884,21 @@ export default function CargoManagementWorkspace() {
           </div>
 
           <button
-            disabled={isSubmitting}
+            disabled={isSubmitting || !!validationError}
             style={{
               width: "100%",
               marginTop: "18px",
               padding: "14px 16px",
               borderRadius: "14px",
               border: "none",
-              background: isSubmitting
+              background: isSubmitting || validationError
                 ? "rgba(168,85,247,0.45)"
                 : "linear-gradient(90deg, #7c3aed, #22d3ee)",
               color: "#ffffff",
               fontFamily: "'Share Tech Mono', monospace",
               fontSize: "11px",
               letterSpacing: "0.14em",
-              cursor: isSubmitting ? "wait" : "pointer",
+              cursor: isSubmitting || validationError ? "not-allowed" : "pointer",
             }}
             type="submit"
           >
