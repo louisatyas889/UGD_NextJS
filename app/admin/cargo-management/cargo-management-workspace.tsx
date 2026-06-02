@@ -42,6 +42,10 @@ function formatDate(date: string) {
 
 function getMinDate(): string {
   const today = new Date();
+<<<<<<< HEAD
+=======
+  today.setDate(today.getDate()); // Can be today or future
+>>>>>>> 2404c78 (Fix: Menambahkan opsi HOME PORT dan memperbaiki warna neon pada chart)
   const year = today.getFullYear();
   const month = String(today.getMonth() + 1).padStart(2, "0");
   const day = String(today.getDate()).padStart(2, "0");
@@ -50,7 +54,11 @@ function getMinDate(): string {
 
 function getMaxDate(): string {
   const maxDate = new Date();
+<<<<<<< HEAD
   maxDate.setDate(maxDate.getDate() + 365);
+=======
+  maxDate.setDate(maxDate.getDate() + 365); // Max 1 year in future
+>>>>>>> 2404c78 (Fix: Menambahkan opsi HOME PORT dan memperbaiki warna neon pada chart)
   const year = maxDate.getFullYear();
   const month = String(maxDate.getMonth() + 1).padStart(2, "0");
   const day = String(maxDate.getDate()).padStart(2, "0");
@@ -233,7 +241,11 @@ export default function CargoManagementWorkspace() {
       setValidationError("");
     }
 
+<<<<<<< HEAD
     // Validate price field in real-time
+=======
+    // Validate price field
+>>>>>>> 2404c78 (Fix: Menambahkan opsi HOME PORT dan memperbaiki warna neon pada chart)
     if (field === "shippingPrice") {
       const priceValue = Number(value);
       if (value !== "" && !isNaN(priceValue)) {
@@ -274,7 +286,11 @@ export default function CargoManagementWorkspace() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 2404c78 (Fix: Menambahkan opsi HOME PORT dan memperbaiki warna neon pada chart)
     // Validate before submitting
     if (!validateForm()) {
       return;
@@ -354,6 +370,9 @@ export default function CargoManagementWorkspace() {
     setValidationError("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
+
+  const minDate = getMinDate();
+  const maxDate = getMaxDate();
 
   return (
     <main style={{ padding: "24px" }}>
@@ -609,7 +628,11 @@ export default function CargoManagementWorkspace() {
                 max={maxDate}
               />
               <span style={{ fontSize: "11px", color: "#64748b" }}>
+<<<<<<< HEAD
                 Hari ini - {maxDate.split("-").reverse().join("/")}
+=======
+                (Hari ini hingga {maxDate.split("-").reverse().join("/")})
+>>>>>>> 2404c78 (Fix: Menambahkan opsi HOME PORT dan memperbaiki warna neon pada chart)
               </span>
             </label>
 
@@ -1174,3 +1197,4 @@ function actionButtonStyle(color: string): CSSProperties {
     width: "100%",
   };
 }
+

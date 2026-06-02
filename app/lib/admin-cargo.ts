@@ -38,6 +38,7 @@ const cargoQuickUpdateSchema = z.object({
   shipmentStatus: z.enum(shipmentStatusOptions),
   shippingPrice: z.coerce.number().nonnegative("Harga atau tarif tidak boleh negatif."),
   description: z.string().trim().default(""),
+  transactionStatus: z.string().trim().default("Belum Dibayar"),
 });
 
 export type AdminCargoCreateInput = z.infer<typeof cargoCreateSchema>;
@@ -481,11 +482,13 @@ export async function updateAdminCargoRecord(
         INSERT INTO transaksi (
           barang_id,
           harga,
+          status_transaksi,
           updated_at
         )
         VALUES (
           ${id},
           ${data.shippingPrice},
+          ${data.transactionStatus},
           NOW()
         )
         ON CONFLICT (barang_id)
@@ -510,16 +513,19 @@ export async function updateAdminCargoRecord(
         INSERT INTO transaksi (
           barang_id,
           harga,
+          status_transaksi,
           updated_at
         )
         VALUES (
           ${id},
           ${data.shippingPrice},
+          ${data.transactionStatus},
           NOW()
         )
         ON CONFLICT (barang_id)
         DO UPDATE SET
           harga = EXCLUDED.harga,
+          status_transaksi = EXCLUDED.status_transaksi,
           updated_at = NOW()
       `;
     }
@@ -546,3 +552,4 @@ export async function fetchAdminCargoRecordById(id: number) {
   const sql = getSql();
   return fetchCargoByIdWithClient(sql, id);
 }
+
