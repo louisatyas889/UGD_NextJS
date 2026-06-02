@@ -1,13 +1,7 @@
 "use client";
-import type { Metadata } from "next";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import PrimeTopbar from "../../ui/PrimeTopbar";
-
-export const metadata: Metadata = {
-  title: "Admin Live Tracking | Serena Sail",
-  description: "Halaman live tracking admin untuk melacak kapal dan memperbarui status secara real-time.",
-};
 
 type Vessel = {
   id: string;

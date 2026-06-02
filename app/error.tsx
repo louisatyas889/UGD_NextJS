@@ -1,10 +1,3 @@
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Error | Serena Sail",
-  description: "Terjadi kesalahan sistem. Silakan muat ulang atau kembali ke beranda.",
-};
-
 export default function GlobalError({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <main className="min-h-screen bg-[#020617] text-white flex items-center justify-center px-6 py-12">

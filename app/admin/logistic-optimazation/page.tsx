@@ -1,13 +1,7 @@
 "use client";
-import type { Metadata } from "next";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import PrimeTopbar from "../../ui/PrimeTopbar";
-
-export const metadata: Metadata = {
-  title: "Admin Logistic Optimization | Serena Sail",
-  description: "Halaman optimasi logistik untuk rute kapal dan perencanaan navigasi.",
-};
 
 const legends = [
   { label: "RUTE SAAT INI (AKTIF)", color: "#22d3ee" },
