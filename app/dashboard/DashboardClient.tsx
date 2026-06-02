@@ -3,11 +3,12 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import PrimeTopbar from "../ui/PrimeTopbar";
 import { useFleet } from "../context/FleetContext";
 
-function MonIcon({ t }: { t: string }) {
-  if (t === "chart") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
-  if (t === "anchor") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="22"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>;
-  if (t === "warn") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>;
+function MonIcon({ t, color }: { t: string; color?: string }) {
+  if (t === "chart") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color || "#22d3ee"} strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
+  if (t === "anchor") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color || "#a855f7"} strokeWidth="2"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="22"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>;
+  if (t === "warn") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color || "#f59e0b"} strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+  // Default fallback: Logo Obeng / Wrench Tool
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color || "#f472b6"} strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>;
 }
 
 interface DashboardClientProps {
@@ -176,7 +177,13 @@ export default function DashboardClient({ initialCards, initialLogs = [], initia
 
     filteredVessels.forEach((v: any, index: number) => {
       const [finalLat, finalLng] = getAccurateCoordinates(v, index);
-      const customColor = v.statusColor || "#22d3ee";
+      const upperStatus = (v.status || "").toUpperCase();
+      
+      // Sinkronisasi Warna Peta: HOME PORT dan IN PORT menjadi Ungu Neon
+      let customColor = v.statusColor || "#22d3ee";
+      if (upperStatus === "HOME PORT" || upperStatus === "IN PORT") {
+        customColor = "#a855f7";
+      }
 
       const tacticalIcon = L.divIcon({
         className: 'map-pulse-icon',
@@ -278,7 +285,22 @@ export default function DashboardClient({ initialCards, initialLogs = [], initia
             </div>
             {filteredVessels && filteredVessels.length > 0 ? (
               filteredVessels.map((v: any) => {
-                const currentStatusColor = v.statusColor || "#22d3ee";
+                const upperStatus = (v.status || "").toUpperCase();
+
+                // 1. Kondisi Warna Status: HOME PORT dan IN PORT dipaksa Ungu Neon (#a855f7)
+                let currentStatusColor = v.statusColor || "#22d3ee";
+                if (upperStatus === "HOME PORT" || upperStatus === "IN PORT") {
+                  currentStatusColor = "#a855f7";
+                }
+
+                // 2. Distribusi Ikon: MAINTENANCE dapat Obeng (tool), HOME/IN PORT dapat Jangkar (anchor)
+                let iconType = v.mon || "chart";
+                if (upperStatus === "MAINTENANCE") {
+                  iconType = "tool";
+                } else if (upperStatus === "HOME PORT" || upperStatus === "IN PORT") {
+                  iconType = "anchor";
+                }
+
                 return (
                   <div key={v.id} style={{ display: "flex", alignItems: "center", gap: "16px", padding: "14px 18px", borderBottom: "1px solid rgba(255,255,255,0.04)", transition: "background 0.15s" }}
                     onMouseEnter={e => { e.currentTarget.style.background = "rgba(168,85,247,0.04)"; }} onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
@@ -294,7 +316,7 @@ export default function DashboardClient({ initialCards, initialLogs = [], initia
                       <span className="eta" style={{ color: v.etaColor || "#e5e7eb" }}>{v.eta || "N/A"}</span>
                     </div>
                     <div style={{ minWidth: 32, display: "flex", justifyContent: "center" }}>
-                      <MonIcon t={v.mon || "chart"} />
+                      <MonIcon t={iconType} color={currentStatusColor} />
                     </div>
                   </div>
                 );

@@ -5,11 +5,12 @@ import { filterItemsByQuery, paginateItems } from "../lib/data-controls";
 import DataPaginationBar from "../ui/data-pagination-bar";
 import DataSearchInput from "../ui/data-search-input";
 
-function MonIcon({ t }: { t: string }) {
-  if (t === "chart") return <svg fill="none" height="16" stroke="#22d3ee" strokeWidth="2" viewBox="0 0 24 24" width="16"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>;
-  if (t === "anchor") return <svg fill="none" height="16" stroke="#a855f7" strokeWidth="2" viewBox="0 0 24 24" width="16"><circle cx="12" cy="5" r="3" /><line x1="12" x2="12" y1="8" y2="22" /><path d="M5 12H2a10 10 0 0 0 20 0h-3" /></svg>;
-  if (t === "warn") return <svg fill="none" height="16" stroke="#f59e0b" strokeWidth="2" viewBox="0 0 24 24" width="16"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" x2="12" y1="9" y2="13" /><line x1="12" x2="12.01" y1="17" y2="17" /></svg>;
-  return <svg fill="none" height="16" stroke="#22d3ee" strokeWidth="2" viewBox="0 0 24 24" width="16"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>;
+function MonIcon({ t, color }: { t: string; color?: string }) {
+  if (t === "chart") return <svg fill="none" height="16" stroke={color || "#22d3ee"} strokeWidth="2" viewBox="0 0 24 24" width="16"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>;
+  if (t === "anchor") return <svg fill="none" height="16" stroke={color || "#a855f7"} strokeWidth="2" viewBox="0 0 24 24" width="16"><circle cx="12" cy="5" r="3" /><line x1="12" x2="12" y1="8" y2="22" /><path d="M5 12H2a10 10 0 0 0 20 0h-3" /></svg>;
+  if (t === "warn") return <svg fill="none" height="16" stroke={color || "#f59e0b"} strokeWidth="2" viewBox="0 0 24 24" width="16"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" x2="12" y1="9" y2="13" /><line x1="12" x2="12.01" y1="17" y2="17" /></svg>;
+  // Fallback / Tool / Obeng (Wrench)
+  return <svg fill="none" height="16" stroke={color || "#f472b6"} strokeWidth="2" viewBox="0 0 24 24" width="16"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>;
 }
 
 interface FleetActiveTableProps {
@@ -23,6 +24,7 @@ function getStatusColor(status: string) {
   const s = status.toLowerCase();
   if (s.includes("en route") || s.includes("underway")) return { color: "#22d3ee", bg: "rgba(34,211,238,0.08)", border: "rgba(34,211,238,0.25)" };
   if (s.includes("delay")) return { color: "#f87171", bg: "rgba(248,113,113,0.08)", border: "rgba(248,113,113,0.25)" };
+  if (s.includes("maintenance")) return { color: "#f472b6", bg: "rgba(244,114,182,0.08)", border: "rgba(244,114,182,0.25)" };
   if (s.includes("port") || s.includes("docked")) return { color: "#a855f7", bg: "rgba(168,85,247,0.08)", border: "rgba(168,85,247,0.25)" };
   return { color: "#6b7280", bg: "rgba(107,114,128,0.08)", border: "rgba(107,114,128,0.25)" };
 }
@@ -107,6 +109,16 @@ export default function FleetActiveTable({ dbVessels, onOpenCreate, onOpenEdit, 
               ) : (
                 paginatedVessels.items.map((vessel) => {
                   const sc = getStatusColor(vessel.status);
+                  const upperStatus = (vessel.status || "").toUpperCase();
+
+                  // Penentuan tipe logo dinamis sesuai status kapal
+                  let iconType = vessel.mon || "chart";
+                  if (upperStatus === "MAINTENANCE") {
+                    iconType = "tool";
+                  } else if (upperStatus === "HOME PORT" || upperStatus === "IN PORT") {
+                    iconType = "anchor";
+                  }
+
                   return (
                     <tr className="v-row" key={vessel.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
                       <td style={{ textAlign: "left", padding: "18px 12px" }}>
@@ -127,7 +139,7 @@ export default function FleetActiveTable({ dbVessels, onOpenCreate, onOpenEdit, 
                       <td style={{ padding: "18px 12px" }}>
                         <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 11, color: vessel.eta === "--" ? "#f87171" : "#e5e7eb" }}>{vessel.eta}</span>
                       </td>
-                      <td style={{ padding: "18px 12px" }}><MonIcon t={vessel.mon} /></td>
+                      <td style={{ padding: "18px 12px" }}><MonIcon t={iconType} color={sc.color} /></td>
                       <td style={{ textAlign: "right", padding: "18px 12px" }}>
                         <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
                           <button onClick={() => onOpenEdit(vessel)} style={{ background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.25)", color: "#a855f7", fontFamily: "'Share Tech Mono', monospace", fontSize: "9px", padding: "5px 10px", cursor: "pointer", borderRadius: "5px", letterSpacing: "0.08em", transition: "all 0.15s" }}

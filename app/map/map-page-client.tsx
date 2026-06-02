@@ -75,7 +75,6 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
             } else if (currentStatus === "EN RUTE" || currentStatus === "AKTIF") {
               triggerNotification(currentVessel.id, `FLEET ${currentVessel.id}: Status updated to EN RUTE. Departing from Origin.`, "warn");
             } else if (currentStatus === "IN PORT" || currentStatus === "ACTIVE") {
-              // FIX: Menghapus teks typo '10 seconds * 1000' yang merusak kompilasi build
               setTimeout(() => {
                 triggerNotification(currentVessel.id, `ARRIVED // VESSEL ${currentVessel.id} status is now IN PORT.`, "success");
               }, 10000); 
@@ -115,6 +114,7 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // Bersihkan map lama jika ada sebelum membuat instance baru
     if (leafletRef.current) {
       leafletRef.current.remove();
       leafletRef.current = null;
@@ -133,6 +133,11 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
       if (!mapRef.current || (window as any).L === undefined) return;
       const L = (window as any).L;
 
+      // Antisipasi kondisi balapan (race condition) saat pemuatan asinkronous
+      if (leafletRef.current) {
+        leafletRef.current.remove();
+      }
+
       const map = L.map(mapRef.current, {
         center: [10.0, 118.0],
         zoom: 4,
@@ -140,15 +145,20 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
         attributionControl: false
       });
 
+      // PERBAIKAN: Menyimpan instance peta ke dalam ref agar bisa dibersihkan nanti
+      leafletRef.current = map;
+
       L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
         maxZoom: 19
       }).addTo(map);
+
+      // Reset daftar marker lama
+      markersRef.current = {};
 
       dbVessels.forEach((v, index) => {
         const [finalLat, finalLng] = getStaticTargetCoordinates(v, index);
         const cleanStatus = (v.status || "").toUpperCase().trim();
         
-        // GUNAKAN WARNA KONSISTEN YANG SUDAH DI-MAPPING DARI SERVER HULU (v.color)
         const themeColor = v.color || "#22d3ee";
         let statusText = cleanStatus;
         
@@ -194,11 +204,19 @@ export default function MapPageClient({ dbVessels }: MapPageClientProps) {
         marker.bindPopup(content, { className: 'custom-prime-popup', minWidth: 240, closeButton: false });
         markersRef.current[v.id] = marker;
       });
-
-      leafletRef.current = map;
     };
 
     document.head.appendChild(script);
+
+    // PERBAIKAN: Fungsi cleanup saat komponen unmount atau dbVessels berubah
+    return () => {
+      if (leafletRef.current) {
+        leafletRef.current.remove();
+        leafletRef.current = null;
+      }
+      if (document.head.contains(script)) document.head.removeChild(script);
+      if (document.head.contains(link)) document.head.removeChild(link);
+    };
   }, [dbVessels]);
 
   const handleFocusVessel = (v: Vessel) => {

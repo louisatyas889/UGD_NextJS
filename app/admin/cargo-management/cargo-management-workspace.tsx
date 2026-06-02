@@ -90,6 +90,7 @@ function buildFormDataFromRecord(record: CargoRecord): CargoFormData {
     vehicleCode: record.vehicleCode,
     vehicleCapacityKg: String(record.vehicleCapacityKg),
     vehicleStatus: record.vehicleStatus as CargoFormData["vehicleStatus"],
+    itemPrice: String(record.itemPrice ?? 0), 
   };
 }
 
@@ -228,12 +229,6 @@ export default function CargoManagementWorkspace() {
     field: K,
     value: CargoFormData[K],
   ) {
-    // Clear validation error when user starts typing
-    if (validationError) {
-      setValidationError("");
-    }
-
-    // Validate price field in real-time
     if (field === "shippingPrice") {
       const priceValue = Number(value);
       if (value !== "" && !isNaN(priceValue)) {
@@ -241,7 +236,11 @@ export default function CargoManagementWorkspace() {
           setValidationError(`Tarif pengiriman minimal Rp ${formatCurrency(MIN_PRICE)}`);
         } else if (priceValue > MAX_PRICE) {
           setValidationError(`Tarif pengiriman maksimal Rp ${formatCurrency(MAX_PRICE)}`);
+        } else {
+          setValidationError(""); 
         }
+      } else {
+        setValidationError("");
       }
     }
 
@@ -275,7 +274,6 @@ export default function CargoManagementWorkspace() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    // Validate before submitting
     if (!validateForm()) {
       return;
     }
@@ -710,7 +708,7 @@ export default function CargoManagementWorkspace() {
                 max={MAX_PRICE}
                 onChange={(event) => handleFieldChange("shippingPrice", event.target.value)}
                 required
-                step="1000"
+                step="any" 
                 style={inputStyle}
                 type="number"
                 value={formData.shippingPrice}

@@ -22,18 +22,23 @@ export default async function MapPage() {
   const initialVessels = uniqueVesselsMap.map((v: any, index: number) => {
     const lowerStatus = (v.status || "").toLowerCase().trim();
 
-    // --- SINKRONISASI WARNA UTAMA BERDASARKAN STATUS (FIXED) ---
-    let finalColor = "#22d3ee"; // Default: Cyan (EN RUTE / AKTIF)
+    // --- SINKRONISASI WARNA UTAMA BERDASARKAN STATUS (SINKRON DENGAN SISTEM FLEET SEBELUMNYA) ---
+    let finalColor = "#22d3ee"; // Default: Cyan (EN ROUTE / UNDERWAY / AKTIF)
     let diagnosticsStatus = "NO ISSUES";
 
     if (lowerStatus.includes("maintenance") || lowerStatus === "mainted") {
-      finalColor = "#9ca3af";        // Abu-abu untuk Maintenance
+      finalColor = "#f472b6";        // Pink / Merah Muda untuk Maintenance
       diagnosticsStatus = "UNDER REPAIR";
     } else if (lowerStatus.includes("delay")) {
-      finalColor = "#ef4444";        // MERAH MENYALA untuk Delay 🚨
+      finalColor = "#f87171";        // Merah Terang untuk Delay 🚨
       diagnosticsStatus = "WEATHER DELAY";
-    } else if (lowerStatus === "in port" || lowerStatus === "active" || lowerStatus === "aktif") {
-      finalColor = "#a855f7";        // Ungu untuk In Port
+    } else if (
+      lowerStatus.includes("port") || 
+      lowerStatus.includes("docked") || 
+      lowerStatus === "active" || 
+      lowerStatus === "aktif"
+    ) {
+      finalColor = "#a855f7";        // Ungu Neon untuk In Port / Home Port / Docked
     }
 
     return {
