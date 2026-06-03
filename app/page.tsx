@@ -3,18 +3,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { TrakingPackages } from './lib/placeholder-data';
 
-// --- KOMPONEN UI ---
+// --- INTERFACES TYPESCRIPT ---
+interface TrackingPackage {
+  id: string;
+  package_size: string;
+  dest: string; 
+  lat: number;
+  lng: number;
+  vesselName: string; 
+}
 
+// --- KOMPONEN UI NAVBAR ---
 const Navbar = () => (
-  <nav className="fixed top-0 w-full z-50 bg-[#020617]/80 backdrop-blur-md border-b border-white/5 px-8 py-5">
+  <nav className="fixed top-0 w-full z-50 bg-[#020617]/85 backdrop-blur-md border-b border-white/5 px-8 py-5">
     <div className="max-w-7xl mx-auto flex items-center justify-between">
       <Link href="/" className="flex items-center gap-3 group">
         <div className="w-10 h-10 border border-purple-500/50 rounded-lg flex items-center justify-center bg-purple-500/10 group-hover:bg-purple-500/20 transition-all">
           <Image src="/kapal.png" alt="Logo" width={25} height={25} />
         </div>
-        <span className="text-xl font-black italic tracking-tighter group-hover:text-purple-400 transition-colors">
+        <span className="text-xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-purple-300 group-hover:to-cyan-400 transition-all">
           SERENA SAIL
         </span>
       </Link>
@@ -34,7 +42,7 @@ const Navbar = () => (
 
       <Link 
         href="/login" 
-        className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase tracking-widest hover:bg-purple-600 hover:border-purple-500 transition-all duration-300 shadow-[0_0_20px_rgba(168,85,247,0.1)]"
+        className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase tracking-widest text-gray-200 hover:text-white hover:bg-purple-600 hover:border-purple-500 transition-all duration-300 shadow-[0_0_20px_rgba(168,85,247,0.1)]"
       >
         Login Admin / User
       </Link>
@@ -42,47 +50,59 @@ const Navbar = () => (
   </nav>
 );
 
-const MissionCard = ({ number, title, desc, iconSrc, iconAlt }: any) => (
-  <div className="bg-white/[0.03] backdrop-blur-sm border border-white/10 p-10 rounded-xl hover:border-purple-500/50 transition-all group relative overflow-hidden text-left min-h-[300px]">
-    <div className="absolute top-0 right-0 p-6 text-6xl font-black text-white/5 group-hover:text-purple-500/10 transition-colors">
-      {number}
-    </div>
-    <div className="relative w-16 h-16 mb-8">
-      <Image src={iconSrc} alt={iconAlt} fill className="object-contain" />
-    </div>
-    <h3 className="text-2xl md:text-3xl font-bold mb-4 uppercase tracking-tight">{title}</h3>
-    <p className="text-gray-300 text-lg md:text-xl leading-relaxed">{desc}</p>
-  </div>
-);
+interface ServiceCardProps {
+  size: string;
+  price: string;
+  desc: string;
+  details: string;
+  onClick: () => void;
+}
 
-const ServiceCard = ({ size, price, desc, details }: any) => (
-  <div className="bg-white/[0.05] backdrop-blur-md border border-white/10 p-10 rounded-2xl hover:bg-purple-500/10 transition-all duration-500 group flex flex-col justify-between min-h-[400px]">
+const ServiceCard: React.FC<ServiceCardProps> = ({ size, price, desc, details, onClick }) => (
+  <div 
+    onClick={onClick}
+    className="bg-white/[0.04] backdrop-blur-md border border-white/10 p-10 rounded-2xl hover:bg-purple-500/10 hover:border-purple-500/40 cursor-pointer transition-all duration-500 group flex flex-col justify-between min-h-[400px]"
+  >
     <div>
-      <div className="text-purple-400 text-sm font-black uppercase tracking-[0.3em] mb-4">{size} Package</div>
-      <div className="text-4xl md:text-5xl font-black mb-6 tracking-tighter italic leading-tight">
-        <span className="text-lg font-normal not-italic text-gray-400 uppercase tracking-widest">Mulai dari</span> <br />
+      <div className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 text-sm font-black uppercase tracking-[0.3em] mb-4">{size} Package</div>
+      <div className="text-4xl md:text-5xl font-black mb-6 tracking-tighter italic leading-tight text-white">
+        <span className="text-xs font-normal not-italic text-gray-400 uppercase tracking-widest block mb-1">Mulai dari</span>
         {price}
       </div>
-      <p className="text-gray-200 text-lg md:text-xl mb-8 leading-relaxed font-medium">{desc}</p>
+      <p className="text-gray-300 text-base md:text-lg mb-8 leading-relaxed font-medium">{desc}</p>
     </div>
-    <div className="pt-8 border-t border-white/10">
+    <div className="pt-8 border-t border-white/5 flex justify-between items-center">
       <p className="text-xs md:text-sm text-cyan-400 font-bold uppercase tracking-widest leading-relaxed">{details}</p>
+      <span className="text-xs bg-purple-500/20 text-purple-300 px-3 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity font-mono">PILIH</span>
     </div>
   </div>
 );
 
-// --- MAIN PAGE ---
-
 export default function Page() {
-  const [packageId, setPackageId] = useState("");
-  const [activePkg, setActivePkg] = useState<any>(null); // Untuk simpan info paket yang ketemu
+  const [packageId, setPackageId] = useState<string>("");
+  const [activePkg, setActivePkg] = useState<TrackingPackage | null>(null);
+  const [trackingError, setTrackingError] = useState<string>("");
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [selectedService, setSelectedService] = useState<string>("");
+  const [checkoutStatus, setCheckoutStatus] = useState<string>("");
+  
+  const [formData, setFormData] = useState({
+    pengirim: "", penerima: "", telepon: "", asal: "", tujuan: "", barang: "", berat: "", pembayaran: "QRIS", tanggal: ""
+  });
+
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<any>(null);
   const currentMarker = useRef<any>(null);
 
-  // LOGIKA MAP INTERAKTIF
   useEffect(() => {
     if (typeof window === "undefined" || leafletMap.current) return;
+
+    const fontLink = document.createElement("link");
+    fontLink.rel = "stylesheet";
+    fontLink.href = "https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap";
+    document.head.appendChild(fontLink);
 
     const link = document.createElement("link");
     link.rel = "stylesheet";
@@ -96,43 +116,134 @@ export default function Page() {
       const L = (window as any).L;
 
       const map = L.map(mapContainerRef.current, {
-        center: [-2.5489, 118.0149], 
-        zoom: 5,
+        center: [15.0, 120.0],
+        zoom: 3,
         zoomControl: false,
         attributionControl: false
       });
 
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png").addTo(map);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", {
+        maxZoom: 19
+      }).addTo(map);
+      
       leafletMap.current = map;
+      setTimeout(() => { map.invalidateSize(); }, 300);
     };
     document.head.appendChild(script);
   }, []);
 
-  // FUNGSI HANDLE LACAK
-  const handleTrack = () => {
-    const found = TrakingPackages.find(p => p.id.toUpperCase() === packageId.toUpperCase());
+  const handleTrack = async () => {
+    const searchId = packageId.toUpperCase().trim();
+    if (!searchId) return;
+
+    setTrackingError("");
+    setIsSearching(true);
+
+    try {
+      const response = await fetch(`/api/track?id=${encodeURIComponent(searchId)}`);
+      const data = await response.json();
+
+      if (data.error) {
+        setActivePkg(null);
+        setTrackingError(`⚡ ${data.error}`);
+        setIsSearching(false);
+        return;
+      }
+
+      if (data.tracking && leafletMap.current) {
+        const L = (window as any).L;
+        
+        const foundPackage: TrackingPackage = {
+          id: data.tracking.id,
+          package_size: data.tracking.package_size,
+          dest: data.tracking.destination,
+          lat: parseFloat(data.tracking.lat),
+          lng: parseFloat(data.tracking.lng),
+          vesselName: data.tracking.vessel_name
+        };
+
+        setActivePkg(foundPackage);
+        
+        leafletMap.current.invalidateSize();
+        leafletMap.current.flyTo([foundPackage.lat, foundPackage.lng], 6, { animate: true, duration: 2 });
+
+        if (currentMarker.current) currentMarker.current.remove();
+
+        const pulseIcon = L.divIcon({
+          className: 'map-pulse-icon',
+          html: `<div style="width:14px; height:14px; background:#22d3ee; border-radius:50%; box-shadow:0 0 15px #22d3ee;"></div>`,
+          iconSize: [14, 14]
+        });
+
+        currentMarker.current = L.marker([foundPackage.lat, foundPackage.lng], { icon: pulseIcon }).addTo(leafletMap.current);
+        currentMarker.current.bindPopup(
+          `<b style="color:black; font-family:sans-serif;">${foundPackage.vesselName}</b><br/>` +
+          `<span style="color:#4b5563; font-family:sans-serif;">Dest: ${foundPackage.dest}</span>`
+        ).openPopup();
+      
+      } else if (data.barang) {
+        setActivePkg(null);
+        setTrackingError(
+          `📦 Manifest Terdaftar: Barang dari [${data.barang.nama_pengirim}] tujuan [${data.barang.negara_tujuan}] ` +
+          `ditemukan di sistem dengan status operasional [${data.barang.status_barang}]. Menunggu keberangkatan armada kargo.`
+        );
+      } else {
+        setActivePkg(null);
+        setTrackingError("❌ Nomor resi kargo atau ID Kontainer tidak terdaftar di database manifest.");
+      }
+    } catch (err) {
+      console.error(err);
+      setActivePkg(null);
+      setTrackingError("⚡ Kegagalan jaringan. Tidak dapat terhubung ke sistem manifest server.");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    if (found && leafletMap.current) {
-      const L = (window as any).L;
-      setActivePkg(found);
+    const generatedId = `PKG-${Math.floor(100000 + Math.random() * 900000)}`;
+    setCheckoutStatus("Sedang memproses dan mengamankan data ke database Neon...");
 
-      // Geser peta ke koordinat kapal
-      leafletMap.current.flyTo([found.lat, found.lng], 7, { animate: true, duration: 2 });
-
-      // Hapus marker lama jika ada
-      if (currentMarker.current) currentMarker.current.remove();
-
-      const pulseIcon = L.divIcon({
-        className: 'map-pulse-icon',
-        html: `<div style="width:12px; height:12px; background:#22d3ee; border-radius:50%; box-shadow:0 0 15px #22d3ee; animation: blink 1.5s infinite"></div>`,
-        iconSize: [12, 12]
+    try {
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          no_resi: generatedId,
+          nama_pengirim: formData.pengirim,
+          nama_penerima: formData.penerima,
+          negara_asal: formData.asal,
+          negara_tujuan: formData.tujuan,
+          package_size: selectedService,
+          nama_barang: formData.barang,
+          berat: parseFloat(formData.berat) || 0,
+          no_telepon: formData.telepon,
+          tanggal: formData.tanggal
+        }),
       });
 
-      // Tambah marker baru
-      currentMarker.current = L.marker([found.lat, found.lng], { icon: pulseIcon }).addTo(leafletMap.current);
-      currentMarker.current.bindPopup(`<b style="color:black">${found.vesselName}</b><br/><span style="color:gray">Dest: ${found.dest}</span>`).openPopup();
-    } else {
-      alert("ID Paket tidak ditemukan!");
+      const data = await response.json();
+
+      if (data.error) {
+        setCheckoutStatus(`❌ Gagal: ${data.error}`);
+        return;
+      }
+
+      setCheckoutStatus(`✅ Transaksi Berhasil! ID Resi Otomatis: ${generatedId}. Data sudah disimpan aman di database Neon.`);
+      
+      setTimeout(() => {
+        setIsModalOpen(false);
+        setCheckoutStatus("");
+        setFormData({ pengirim: "", penerima: "", telepon: "", asal: "", tujuan: "", barang: "", berat: "", pembayaran: "QRIS", tanggal: "" });
+      }, 6000);
+
+    } catch (err) {
+      console.error(err);
+      setCheckoutStatus("❌ Kegagalan sistem jaringan. Tidak dapat mengirim data manifest.");
     }
   };
 
@@ -142,161 +253,254 @@ export default function Page() {
     else leafletMap.current.zoomOut();
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const openForm = (serviceName: string) => {
+    setSelectedService(serviceName);
+    setIsModalOpen(true);
+  };
+
   return (
-    <main className="min-h-screen bg-[#020617] text-white font-sans selection:bg-cyan-500/30 overflow-x-hidden">
-      <style>{`
-        @keyframes blink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.5); } }
-        .leaflet-container { background: #030712 !important; cursor: crosshair !important; }
-        .leaflet-popup-content-wrapper { border-radius: 8px; font-weight: bold; }
-      `}</style>
+    <main className="min-h-screen bg-[#020617] text-white font-sans selection:bg-cyan-500/30 overflow-x-hidden relative">
+      <style dangerouslySetInnerHTML={{ __html: `
+        .leaflet-container { background: #020617 !important; cursor: crosshair !important; }
+        .leaflet-popup-content-wrapper { border-radius: 8px; font-weight: bold; padding: 4px; }
+      `}} />
 
       <Navbar />
 
-      {/* 1. HERO SECTION */}
-      <section className="relative h-screen flex flex-col items-center justify-center text-center px-4">
-        <div className="absolute w-[800px] h-[800px] bg-purple-600/10 blur-[180px] rounded-full" />
-        <div className="z-10 pt-20">
-          <div className="relative w-32 h-32 mx-auto mb-10 group">
-            <div className="absolute inset-0 bg-purple-500/20 blur-2xl rounded-full group-hover:bg-purple-500/40 transition-all duration-700" />
-            <div className="relative w-full h-full border-2 border-purple-500/30 rounded-2xl flex items-center justify-center bg-[#030712]/80 backdrop-blur-sm p-4">
-              <Image src="/kapal.png" alt="Logo" width={120} height={120} priority className="object-contain" />
-            </div>
-          </div>
-          <h1 className="text-7xl md:text-[10rem] font-black tracking-tighter mb-6 italic leading-none">SERENA SAIL</h1>
-          <p className="text-cyan-400 tracking-[0.5em] uppercase text-sm md:text-lg font-black opacity-90">
+      {/* HERO SECTION */}
+      <section className="relative h-screen flex flex-col items-center justify-center text-center px-4 overflow-hidden">
+        <div className="absolute w-[800px] h-[800px] bg-purple-600/10 blur-[180px] rounded-full -z-10" />
+        
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] select-none scale-125 md:scale-100 z-0">
+          <Image src="/kapal.png" alt="Watermark Logo" width={550} height={550} priority className="object-contain" />
+        </div>
+
+        <div className="z-10 pt-20 relative">
+          <h1 className="text-7xl md:text-[10rem] font-black tracking-tighter mb-6 italic leading-none bg-clip-text text-transparent bg-gradient-to-b from-white via-gray-200 to-purple-300 drop-shadow-[0_0_35px_rgba(168,85,247,0.25)]">
+            SERENA SAIL
+          </h1>
+          <p className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 tracking-[0.5em] uppercase text-sm md:text-lg font-black opacity-90 drop-shadow-[0_2px_10px_rgba(34,211,238,0.3)]">
             Navigating the Future, Anchored in Precision
           </p>
         </div>
       </section>
 
-      {/* 2. ABOUT US SECTION */}
-      <section id="about" className="max-w-7xl mx-auto px-8 py-40 border-t border-white/5 relative bg-[#020617]">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-start">
+      {/* ABOUT US SECTION */}
+      <section id="about" className="max-w-7xl mx-auto px-8 py-32 border-t border-white/5 relative">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div>
-            <span className="bg-cyan-500/10 text-cyan-400 text-xs font-black px-4 py-2 rounded-full uppercase tracking-widest border border-cyan-500/20">Corporate Identity</span>
-            <h2 className="text-6xl md:text-7xl font-bold mt-8 mb-8 uppercase italic">About Us</h2>
-            <p className="text-2xl md:text-3xl text-blue-100/80 leading-relaxed font-light">
-              Serena Sail adalah pionir solusi maritim global. Kami menciptakan sistem yang <span className="text-purple-400 font-bold">presisi</span> dan <span className="text-cyan-400 font-bold">mudah digunakan</span> oleh semua kalangan.
+            <span className="bg-purple-500/10 text-purple-300 text-xs font-black px-4 py-2 rounded-full uppercase tracking-widest border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+              Corporate Profile
+            </span>
+            <h2 className="text-5xl md:text-6xl font-bold mt-6 uppercase italic tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-100 to-gray-400">
+              Global Maritime Logistics
+            </h2>
+            <p className="text-gray-300 mt-6 text-lg leading-relaxed font-medium">
+              Serena Sail merupakan integrator logistik maritim terdepan yang menghubungkan rute domestik dan internasional menggunakan keandalan armada kargo modern berteknologi pelacakan satelit real-time terintegrasi.
             </p>
           </div>
-          <div className="bg-white/[0.03] p-12 rounded-2xl border border-white/10 backdrop-blur-sm">
-            <h3 className="text-2xl font-bold mb-6 text-cyan-400 uppercase tracking-tighter">Our Core Identity</h3>
-            <p className="text-gray-300 text-xl md:text-2xl leading-relaxed">Kami mendigitalkan pencatatan logistik tradisional menjadi sistem yang transparan, aman, dan dapat diakses mudah oleh siapa saja.</p>
+          <div className="border border-white/10 bg-gradient-to-b from-white/[0.03] to-transparent p-8 rounded-2xl relative overflow-hidden group backdrop-blur-sm">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 blur-xl rounded-full"></div>
+            <h3 style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 mb-4 uppercase tracking-wider">
+              Visi dan Operasional
+            </h3>
+            <p className="text-sm text-gray-400 leading-relaxed font-medium">
+              Menghadirkan transparansi end-to-end data barang bawaan dari pelabuhan asal hingga tujuan akhir demi efisiensi rantai pasok industri UMKM global.
+            </p>
           </div>
         </div>
       </section>
 
-      {/* 3. VISI SECTION */}
-      <section className="max-w-7xl mx-auto px-8 py-40 grid grid-cols-1 lg:grid-cols-2 gap-20 items-center border-t border-white/5">
-        <div>
-          <span className="bg-purple-500/10 text-purple-400 text-xs font-black px-4 py-2 rounded-full uppercase tracking-widest border border-purple-500/20">Strategic Vision</span>
-          <h2 className="text-6xl md:text-7xl font-bold mt-8 mb-10 uppercase italic">Visi</h2>
-          <p className="text-3xl md:text-4xl text-blue-100 leading-tight font-light">Menjadi pionir logistik maritim yang paling <span className="text-purple-400 font-bold underline decoration-purple-500/30">aman</span>, <span className="text-cyan-400 font-bold underline decoration-cyan-500/30">transparan</span>, dan <span className="text-orange-400 font-bold underline decoration-orange-500/30">berkelanjutan</span>.</p>
-        </div>
-        <div className="relative group aspect-video">
-          <div className="absolute -inset-2 bg-gradient-to-r from-purple-500/30 to-cyan-500/30 rounded-3xl blur-2xl opacity-40 group-hover:opacity-60 transition duration-1000"></div>
-          <div className="relative h-full w-full bg-white/[0.02] border border-white/20 rounded-2xl overflow-hidden shadow-2xl">
-            <Image src="/fotoCompany.jpeg" alt="Vessel" fill className="object-cover opacity-70 group-hover:scale-110 transition-transform duration-1000" />
-          </div>
-        </div>
-      </section>
-
-      {/* 4. MISI SECTION */}
-      <section className="max-w-7xl mx-auto px-8 py-40 border-t border-white/5 relative">
-        <h2 className="text-5xl md:text-6xl font-black mb-20 text-center uppercase tracking-[0.2em] italic">Misi</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-          <MissionCard number="01" title="Operasional" desc="Pemantauan armada presisi real-time untuk jaminan ketepatan waktu." iconSrc="/tabel1.png" iconAlt="Operasional" />
-          <MissionCard number="02" title="Inovasi" desc="Sistem navigasi satelit canggih untuk adaptasi cuaca ekstrem." iconSrc="/roket1.png" iconAlt="Inovasi" />
-          <MissionCard number="03" title="Efisiensi" desc="Optimasi bahan bakar untuk mengurangi jejak karbon dunia." iconSrc="/daun1.png" iconAlt="Efisiensi" />
-        </div>
-      </section>
-
-      {/* 5. LAYANAN SECTION */}
-      <section id="layanan" className="max-w-7xl mx-auto px-8 py-40 border-t border-white/5 bg-[#030712]/50">
+      {/* LAYANAN SECTION */}
+      <section id="layanan" className="max-w-7xl mx-auto px-8 py-32 border-t border-white/5 bg-[#030712]/50">
         <div className="text-center mb-20">
           <span className="bg-cyan-500/10 text-cyan-400 text-xs font-black px-4 py-2 rounded-full uppercase tracking-widest border border-cyan-500/20">Shipping Solutions</span>
-          <h2 className="text-6xl md:text-7xl font-bold mt-8 uppercase italic">Layanan Kami</h2>
+          <h2 className="text-5xl md:text-6xl font-bold mt-6 uppercase italic text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-400">Layanan Kami</h2>
+          <p className="text-gray-400 mt-4 text-sm md:text-base">Pilih paket dimensi logistik untuk membuka form entry order manifestasi.</p>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          <ServiceCard size="Small" price="Rp 250.000" desc="Pengiriman dokumen penting atau paket kecil." details="Standard Domestik." />
-          <ServiceCard size="Medium" price="Rp 1.200.000" desc="Ideal untuk inventaris bisnis atau elektronik." details="Volume & Koordinat." />
-          <ServiceCard size="Large" price="Rp 5.500.000" desc="Kapasitas kontainer besar untuk alat berat." details="Rute Pelayaran Khusus." />
+          <ServiceCard size="Small" price="Rp 250.000" desc="Pengiriman dokumen penting atau paket kecil." details="Standard Domestik" onClick={() => openForm("Small")} />
+          <ServiceCard size="Medium" price="Rp 1.200.000" desc="Ideal untuk inventaris bisnis atau elektronik." details="Volume & Koordinat" onClick={() => openForm("Medium")} />
+          <ServiceCard size="Large" price="Rp 5.500.000" desc="Kapasitas kontainer besar untuk alat berat." details="Rute Pelayaran Khusus" onClick={() => openForm("Large")} />
         </div>
       </section>
 
-      {/* 6. TRACING PAKET SECTION */}
-      <section id="tracing" className="max-w-7xl mx-auto px-8 py-40 border-t border-white/5 relative">
+      {/* TRACING PAKET SECTION */}
+      <section id="tracing" className="max-w-7xl mx-auto px-8 py-32 border-t border-white/5 relative">
         <div className="text-left mb-16">
           <span className="bg-orange-500/10 text-orange-400 text-xs font-black px-4 py-2 rounded-full uppercase tracking-widest border border-orange-500/20">Live Tracking</span>
-          <h2 className="text-6xl md:text-7xl font-bold mt-8 uppercase italic">Tracing Paket</h2>
+          <h2 className="text-5xl md:text-6xl font-bold mt-6 uppercase italic text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">Tracing Paket</h2>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-stretch">
-          
           <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 p-10 rounded-3xl flex flex-col justify-center">
-            <h3 className="text-2xl font-bold mb-8 uppercase tracking-tighter text-cyan-400">Masukkan ID Paket</h3>
+            <h3 style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-xl font-bold mb-8 uppercase tracking-tighter text-cyan-400">Masukkan ID Paket</h3>
             <div className="space-y-6">
               <div className="relative">
                 <input 
                   type="text" 
                   value={packageId}
                   onChange={(e) => setPackageId(e.target.value)}
-                  placeholder="Contoh: PKG-100293"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-6 py-5 text-xl font-mono focus:outline-none focus:border-purple-500 transition-all placeholder:text-gray-600 uppercase"
+                  placeholder="Contoh: PKG-100293 atau LUT-0394392687-825"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-6 py-5 text-base font-mono focus:outline-none focus:border-purple-500 transition-all placeholder:text-gray-600 uppercase text-gray-200"
+                  onKeyDown={(e) => e.key === 'Enter' && handleTrack()}
                 />
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 bg-cyan-500 rounded-full animate-ping"></div>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
               </div>
               
               <button 
                 onClick={handleTrack}
-                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-black py-5 rounded-xl uppercase tracking-[0.2em] transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                disabled={isSearching}
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-black py-5 rounded-xl uppercase tracking-[0.2em] text-xs transition-all transform hover:scale-[1.01] active:scale-[0.99] shadow-[0_4px_20px_rgba(147,51,234,0.2)] disabled:opacity-50"
               >
-                Lacak Sekarang
+                {isSearching ? "MENGHUBUNGKAN KE NEON DB..." : "LACAK SEKARANG"}
               </button>
+
+              {trackingError && (
+                <div style={{ fontFamily: `'Share Tech Mono', monospace` }} className="mt-4 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl text-orange-300 text-xs font-medium leading-relaxed">
+                  {trackingError}
+                </div>
+              )}
             </div>
           </div>
 
           <div className="relative group min-h-[400px]">
             <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 to-purple-500/20 rounded-3xl blur opacity-75 group-hover:opacity-100 transition duration-1000"></div>
             <div className="relative h-full w-full bg-[#030712] border border-white/20 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-              
               <div className="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center z-[1000]">
-                <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-pulse"></span> SATELLITE FEED: ACTIVE
+                <span style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-[10px] font-black uppercase tracking-widest text-cyan-400 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-pulse"></span> SATELLITE FEED: NEON DB ACTIVE
                 </span>
+                
                 <div className="flex gap-2">
-                  <button onClick={() => handleZoom("in")} className="w-7 h-7 bg-white/10 rounded flex items-center justify-center hover:bg-cyan-500 transition-colors">+</button>
-                  <button onClick={() => handleZoom("out")} className="w-7 h-7 bg-white/10 rounded flex items-center justify-center hover:bg-cyan-500 transition-colors">−</button>
+                  <button onClick={() => handleZoom("in")} className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded border border-white/20 text-white font-mono text-sm transition-colors">+</button>
+                  <button onClick={() => handleZoom("out")} className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded border border-white/20 text-white font-mono text-sm transition-colors">-</button>
                 </div>
               </div>
               
-              <div className="flex-grow relative z-1">
-                <div ref={mapContainerRef} className="absolute inset-0" />
+              <div className="flex-grow relative w-full h-full min-h-[300px] z-10">
+                <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
               </div>
 
-              <div className="p-6 bg-gradient-to-t from-black to-transparent z-[1000]">
+              {/* PANEL DETAIL DATA LIVE KAPAL */}
+              <div className="p-6 bg-gradient-to-t from-black via-black/80 to-transparent z-[1000]">
                 <div className="flex justify-between items-end">
                   <div>
-                    <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Current Vessel</div>
+                    <div style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Current Vessel</div>
                     <div className="text-lg font-bold italic uppercase text-cyan-400">
-                      {activePkg ? activePkg.vesselName : "Awaiting Track..."}
+                      {activePkg ? activePkg.vesselName : "Awaiting Feed..."}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Destination</div>
-                    <div className="text-lg font-bold text-white uppercase tracking-tighter">
+                    <div style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Destination</div>
+                    <div className="text-lg font-bold text-gray-200 uppercase tracking-tighter">
                       {activePkg ? activePkg.dest : "---"}
                     </div>
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
       </section>
 
+      {/* MODAL FORM ENTRY MANIFEST */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex justify-center items-start pt-20 pb-10 overflow-y-auto bg-black/85 backdrop-blur-sm p-4">
+          <div className="bg-[#0c0c12] border border-white/10 rounded-2xl p-8 max-w-3xl w-full relative shadow-[0_0_50px_rgba(168,85,247,0.15)] animate-fade-in">
+            <button 
+              onClick={() => setIsModalOpen(false)}
+              className="absolute top-6 right-6 text-gray-500 hover:text-white text-base transition-colors"
+            >
+              ✕
+            </button>
+            
+            <div className="mb-6">
+              <p style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-[#a855f7] text-[10px] tracking-[0.14em] mb-2 uppercase">CARGO SECURE ENTRY FORM</p>
+              <h2 className="text-2xl font-bold tracking-tight text-gray-100">Formulir Data Diri Pengiriman</h2>
+              <p className="text-gray-400 text-xs mt-1">Jenis paket terikat otomatis pada pilihan layanan: <span className="text-cyan-400 font-bold uppercase">{selectedService}</span>.</p>
+            </div>
+
+            {checkoutStatus ? (
+              <div style={{ fontFamily: `'Share Tech Mono', monospace` }} className="p-6 bg-green-500/10 border border-green-500/30 rounded-xl text-green-400 text-center text-xs leading-relaxed">
+                {checkoutStatus}
+              </div>
+            ) : (
+              <form onSubmit={handleCheckoutSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                <div className="md:col-span-2 mb-3">
+                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">JENIS LAYANAN YANG DIPILIH</label>
+                  <input type="text" value={`${selectedService} Package`} disabled className="w-full rounded-xl border border-white/5 bg-white/[0.01] text-gray-500 px-3.5 py-2.5 text-xs cursor-not-allowed outline-none" />
+                </div>
+
+                <div className="mb-3">
+                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NAMA PENGIRIM *</label>
+                  <input required name="pengirim" value={formData.pengirim} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Nama Lengkap Pengirim" />
+                </div>
+
+                <div className="mb-3">
+                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NAMA PENERIMA *</label>
+                  <input required name="penerima" value={formData.penerima} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Nama Lengkap Penerima" />
+                </div>
+
+                <div className="mb-3">
+                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NOMOR TELEPON PENGIRIM *</label>
+                  <input required name="telepon" value={formData.telepon} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Contoh: 0812xxxxxxxx" />
+                </div>
+
+                <div className="mb-3">
+                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NAMA BARANG / KOMODITAS *</label>
+                  <input required name="barang" value={formData.barang} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Contoh: Paket Elektronik, Pakaian" />
+                </div>
+
+                <div className="mb-3">
+                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NEGARA ASAL PENGIRIMAN *</label>
+                  <input required name="asal" value={formData.asal} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Contoh: Indonesia, Jepang" />
+                </div>
+
+                <div className="mb-3">
+                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NEGARA TUJUAN PENGIRIMAN *</label>
+                  <input required name="tujuan" value={formData.tujuan} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Contoh: Filipina, Singapura" />
+                </div>
+
+                <div className="mb-3">
+                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">ESTIMASI BERAT BARANG (KG) *</label>
+                  <input required name="berat" value={formData.berat} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="number" step="0.1" min="0.1" placeholder="0.0" />
+                </div>
+
+                <div className="mb-3">
+                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">TANGGAL PENGIRIMAN *</label>
+                  <input required name="tanggal" value={formData.tanggal} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors [color-scheme:dark]" type="date" />
+                </div>
+
+                <div className="mb-3 md:col-span-2">
+                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">METODE PEMBAYARAN KUNCI *</label>
+                  <select required name="pembayaran" value={formData.pembayaran} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-[#0c0c12] text-gray-200 px-3.5 py-2.5 text-xs outline-none cursor-pointer">
+                    <option value="QRIS">QRIS (Automated Feed)</option>
+                    <option value="Debit">Transfer Bank / Debit Virtual Account</option>
+                  </select>
+                </div>
+
+                <button 
+                  type="submit"
+                  style={{ fontFamily: `'Share Tech Mono', monospace` }}
+                  className="md:col-span-2 mt-4 py-4 rounded-xl text-xs tracking-[0.14em] uppercase text-white bg-gradient-to-r from-[#7c3aed] to-[#22d3ee] hover:opacity-90 transition-opacity font-bold shadow-[0_0_25px_rgba(34,211,238,0.15)]"
+                >
+                  Proses Pembayaran & Buat Resi Otomatis
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
       <footer className="py-20 border-t border-white/5 text-center bg-[#010413]">
-        <p className="text-sm md:text-lg text-gray-500 tracking-[0.6em] font-black uppercase">© 2026 SERENA SAIL MARITIME LOGISTICS // ALL RIGHTS RESERVED</p>
+        <p className="text-xs md:text-sm text-gray-500 tracking-[0.6em] font-black uppercase">© 2026 SERENA SAIL MARITIME LOGISTICS - ALL RIGHTS RESERVED</p>
       </footer>
     </main>
   );

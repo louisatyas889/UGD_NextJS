@@ -94,8 +94,8 @@ async function fetchCargoByIdWithClient(sql: SqlClient, id: number) {
       b.nama_pengirim,
       b.nama_penerima,
       b.no_telepon,
-      b.negara_asal,      -- 👈 PERBAIKAN: diubah dari b.kota_asal
-      b.negara_tujuan,    -- 👈 PERBAIKAN: diubah dari b.kota_tujuan
+      b.negara_asal,   
+      b.negara_tujuan,   
       b.nama_barang,
       b.jenis_barang,
       b.berat_barang_kg,
