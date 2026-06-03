@@ -475,7 +475,8 @@ export default function Page() {
 
                 <div className="mb-3">
                   <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">TANGGAL PENGIRIMAN *</label>
-                  <input required name="tanggal" value={formData.tanggal} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors [color-scheme:dark]" type="date" />
+                  <input required name="tanggal" value={formData.tanggal} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors [color-scheme:dark]" type="date" 
+/>
                 </div>
 
                 <div className="mb-3 md:col-span-2">

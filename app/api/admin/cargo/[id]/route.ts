@@ -25,14 +25,14 @@ export async function GET(
     const id = parseId(rawId);
 
     if (!id) {
-      return NextResponse.json({ message: "ID cargo tidak valid." }, { status: 400 });
+      return NextResponse.json({ error: "ID cargo tidak valid." }, { status: 400 });
     }
 
     const record = await fetchAdminCargoRecordById(id);
 
     if (!record) {
       return NextResponse.json(
-        { message: "Data cargo tidak ditemukan." },
+        { error: "Data cargo tidak ditemukan." },
         { status: 404 },
       );
     }
@@ -41,7 +41,7 @@ export async function GET(
   } catch (error) {
     console.error("GET /api/admin/cargo/[id] error", error);
     return NextResponse.json(
-      { message: "Gagal mengambil detail cargo." },
+      { error: "Gagal mengambil detail cargo." },
       { status: 500 },
     );
   }
@@ -56,7 +56,8 @@ export async function PUT(
     const id = parseId(rawId);
 
     if (!id) {
-      return NextResponse.json({ message: "ID cargo tidak valid." }, { status: 400 });
+      // Diubah ke key 'error' agar terbaca oleh frontend (errData.error)
+      return NextResponse.json({ error: "ID cargo tidak valid." }, { status: 400 });
     }
 
     const payload = await request.json();
@@ -64,22 +65,21 @@ export async function PUT(
 
     if (!record) {
       return NextResponse.json(
-        { message: "Data cargo tidak ditemukan." },
+        { error: "Data cargo tidak ditemukan." },
         { status: 404 },
       );
     }
 
-    return NextResponse.json({
-      message: "Data cargo berhasil diperbarui.",
-      record,
-    });
+    return NextResponse.json(record);
+
   } catch (error) {
     console.error("PUT /api/admin/cargo/[id] error", error);
 
     if (error instanceof ZodError) {
       return NextResponse.json(
         {
-          message: error.issues[0]?.message ?? "Validasi form gagal.",
+          // Diubah ke key 'error' agar divalidasi dengan benar di modal frontend
+          error: error.issues[0]?.message ?? "Validasi form gagal.",
           issues: error.issues,
         },
         { status: 400 },
@@ -87,7 +87,7 @@ export async function PUT(
     }
 
     return NextResponse.json(
-      { message: "Gagal memperbarui data cargo." },
+      { error: "Gagal memperbarui data cargo." },
       { status: 500 },
     );
   }
@@ -102,14 +102,14 @@ export async function DELETE(
     const id = parseId(rawId);
 
     if (!id) {
-      return NextResponse.json({ message: "ID cargo tidak valid." }, { status: 400 });
+      return NextResponse.json({ error: "ID cargo tidak valid." }, { status: 400 });
     }
 
     const deleted = await deleteAdminCargoRecord(id);
 
     if (!deleted) {
       return NextResponse.json(
-        { message: "Data cargo tidak ditemukan." },
+        { error: "Data cargo tidak ditemukan." },
         { status: 404 },
       );
     }
@@ -118,7 +118,7 @@ export async function DELETE(
   } catch (error) {
     console.error("DELETE /api/admin/cargo/[id] error", error);
     return NextResponse.json(
-      { message: "Gagal menghapus data cargo." },
+      { error: "Gagal menghapus data cargo." },
       { status: 500 },
     );
   }

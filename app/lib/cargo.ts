@@ -79,6 +79,7 @@ function mapCargoRows(rows: any[]): CargoRecord[] {
     itemName: row.item_name,
     itemType: row.item_type,
     itemWeightKg: Number(row.weight_kg),
+    itemPrice: 0,
     shippingPrice: Number(row.shipping_price),
     transportMode: row.transport_mode,
     deliveryType: row.delivery_type,
