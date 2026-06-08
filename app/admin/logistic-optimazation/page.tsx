@@ -1,303 +1,204 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import PrimeTopbar from "../../ui/PrimeTopbar";
+import PrimeTopbar from "../../ui/PrimeTopbar"; 
 
-const legends = [
-  { label: "RUTE SAAT INI (AKTIF)", color: "#22d3ee" },
-  { label: "RUTE REKOMENDASI (OPTIMISASI AI)", color: "#c084fc" },
-] as const;
+// HELPER: Koordinat Default Negara Tujuan (Fallback otomatis jika jalur rute di DB kosong)
+const getDestinationCoordinates = (code: string): [number, number] => {
+  switch (code?.toUpperCase()) {
+    case "SG": return [1.3521, 103.8198];
+    case "PH": return [14.5995, 120.9842];
+    case "CN": return [31.2304, 121.4737];
+    case "TH": return [13.7563, 100.5018];
+    case "JP": return [35.6762, 139.6503];
+    default: return [0.0, 100.0];
+  }
+};
 
-const metricCards = [
-  {
-    label: "POTENTIAL SAVINGS",
-    value: "$12,400",
-    caption: "Estimasi perjalanan",
-    tone: "#4ade80",
-  },
-  {
-    label: "CARBON REDUCTION",
-    value: "-15%",
-    caption: "Target Emisi EU 2030",
-    tone: "#d8b4fe",
-  },
-] as const;
+// HELPER: Penamaan Pelabuhan Lengkap Berdasarkan Kode Negara
+const getFullDestinationName = (code: string) => {
+  switch (code?.toUpperCase()) {
+    case "SG": return "PORT OF SINGAPORE (SG)";
+    case "PH": return "PORT OF MANILA (PH)";
+    case "CN": return "PORT OF SHANGHAI (CN)";
+    case "TH": return "PORT OF BANGKOK (TH)";
+    case "JP": return "PORT OF TOKYO (JP)";
+    default: return `PORT OF DESTINATION (${code || "INT"})`;
+  }
+};
 
-const routeComparison = [
-  {
-    parameter: "Bahan Bakar",
-    active: "420 Tons",
-    ai: "370 Tons",
-    type: "text",
-  },
-  {
-    parameter: "Waktu ETA",
-    active: "14 Okt, 04:00",
-    ai: "13 Okt, 22:00",
-    type: "text",
-  },
-  {
-    parameter: "Keandalan",
-    active: 3,
-    ai: 5,
-    type: "rating",
-  },
-] as const;
+export default function LogisticOptimizePage() {
+  // STATE UNTUK DATABASE NEON
+  const [fleetVesselsRaw, setFleetVesselsRaw] = useState<any[]>([]);
+  const [vesselRoutesRaw, setVesselRoutesRaw] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMapReady, setIsMapReady] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-const routeBadges = [
-  { label: "VESSEL ID", value: "SS-VALIANT_OR82", accent: "#22d3ee" },
-  { label: "ENGINE", value: "98.4% THRUST", accent: "#e5e7eb" },
-  { label: "TARGET", value: "PORT OF ROTTERDAM", accent: "#22d3ee" },
-] as const;
 
-const activeRoute: [number, number][] = [
-  [-23.5505, -46.6333],
-  [-14.4, -35.2],
-  [0.4, -24.6],
-  [18.7, -16.1],
-  [35.1, -9.2],
-  [45.0, -1.5],
-  [51.9244, 4.4777],
-];
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [activeRouteIndex, setActiveRouteIndex] = useState(0); 
+  const [lastSync, setLastSync] = useState("");
 
-const recommendedRoute: [number, number][] = [
-  [-23.5505, -46.6333],
-  [-10.0, -38.5],
-  [7.2, -27.0],
-  [24.8, -16.2],
-  [39.0, -7.4],
-  [48.4, -0.6],
-  [51.9244, 4.4777],
-];
-
-const routePlayback: [number, number][] = [
-  [-21.2, -42.5],
-  [-15.4, -38.7],
-  [-8.2, -33.9],
-  [0.8, -27.1],
-  [10.5, -21.3],
-  [20.3, -15.4],
-  [31.5, -10.2],
-  [42.4, -4.4],
-  [48.7, 0.8],
-];
-
-const startNode = { lat: -23.5505, lng: -46.6333, label: "SOUTH ATLANTIC ORIGIN" };
-const targetNode = { lat: 51.9244, lng: 4.4777, label: "PORT OF ROTTERDAM" };
-
-function GaugeIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M20 13a8 8 0 1 0-16 0" />
-      <path d="m12 13 4-4" />
-      <path d="M5 19h14" />
-    </svg>
-  );
-}
-
-function SparkleIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="m12 3 1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3Z" />
-      <path d="m18.5 14 .8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8.8-1.7Z" />
-    </svg>
-  );
-}
-
-function Star({
-  filled,
-  color,
-}: {
-  filled: boolean;
-  color: string;
-}) {
-  return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill={filled ? color : "rgba(255,255,255,0.14)"}>
-      <path d="m12 2.7 2.8 5.68 6.27.91-4.53 4.42 1.07 6.25L12 16.97 6.39 19.96l1.07-6.25L2.93 9.3l6.27-.91L12 2.7Z" />
-    </svg>
-  );
-}
-
-export default function LogisticOptimazationPage() {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const leafletRef = useRef<any>(null);
-  const liveMarkerRef = useRef<any>(null);
-  const livePulseRef = useRef<any>(null);
-  const focusBoundsRef = useRef<any>(null);
+  const routeLayerRef = useRef<any>(null);
+  const originMarkerRef = useRef<any>(null);
+  const destinationMarkerRef = useRef<any>(null);
 
-  const [syncTime, setSyncTime] = useState("");
-  const [playbackIndex, setPlaybackIndex] = useState(0);
-
-  const currentLocation = useMemo(
-    () => routePlayback[playbackIndex % routePlayback.length],
-    [playbackIndex],
-  );
-
+  // 1. AMBIL DATA LEWAT API ROUTE DATABASE NEON
   useEffect(() => {
-    const tick = () => {
+    async function fetchNeonData() {
+      try {
+        const response = await fetch("/api/maritime-data");
+        const data = await response.json();
+
+        if (!response.ok) {
+          setApiError(data?.error ? String(data.error) : "Gagal mengambil data");
+          setFleetVesselsRaw([]);
+          setVesselRoutesRaw([]);
+          return;
+        }
+
+        // API saat ini hanya mengirim fleetVessels (dengan field routes nested)
+        setFleetVesselsRaw((data?.fleetVessels || []) as any[]);
+        setVesselRoutesRaw((data?.vesselRoutes || []) as any[]); // tetap ada untuk kompatibilitas (kalau suatu saat API dikembangkan)
+        setApiError(null);
+
+      } catch (error) {
+        console.error("Gagal mengambil data dari API Maritime:", error);
+        setApiError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setIsLoading(false);
+      }
+
+    }
+    fetchNeonData();
+    // Opsional: Polling data tiap 30 detik
+    const interval = setInterval(fetchNeonData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 2. OTOMATIS SINKRONISASI JALUR BERDASARKAN VESSEL_ID KE FORMAT UI ANDA
+  const integratedFleetData = useMemo(() => {
+    if (!fleetVesselsRaw.length) return [];
+
+    return fleetVesselsRaw.map((vessel) => {
+      // API sekarang mengirim routes nested dalam fleetVessels
+      const matchedRoutes = vessel.routes && vessel.routes.length > 0 ? vessel.routes : [];
+
+      let finalRoutes: any[] = [];
+
+      // Helper untuk parse jalur_koordinat menjadi [lat,lng][]
+      const parseCoords = (raw: any): [number, number][] => {
+        if (!raw) return [];
+
+        // Jika DB mengirim string JSON
+        if (typeof raw === "string") {
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        }
+
+        // Jika DB mengirim array langsung
+        if (Array.isArray(raw)) return raw as [number, number][];
+
+        return [];
+      };
+
+      if (matchedRoutes.length > 0) {
+        const sortedRoutes = [...matchedRoutes].sort((a, b) => (a.nomor_rute || 0) - (b.nomor_rute || 0));
+
+        finalRoutes = sortedRoutes.map((r) => {
+          const parsedCoords = parseCoords(r.jalur_koordinat);
+
+          return {
+            id: r.nomor_rute ?? r.id,
+            name: r.status_rute === "ACTIVE" || r.status_rute === "Aktif" ? "Rute Utama" : `AI ${r.status_rute}`,
+            label: r.nomor_rute === 1 ? "UTAMA" : r.nomor_rute === 2 ? "ALT A" : "ALT B",
+            type: r.status_rute,
+            coords: parsedCoords,
+          };
+        });
+      }
+
+      // Kalau ternyata DB punya routes tapi coords kosong/invalid, jangan tampilkan fallback sembarangan,
+      // karena tujuan masalahnya: garis tidak muncul padahal rute ada.
+      // Kita tetap buat fallback hanya kalau TIDAK ada route sama sekali.
+      if (!finalRoutes.length && (!vessel.routes || vessel.routes.length === 0)) {
+        const origin: [number, number] = [
+          Number(vessel.current_lat) || -2.5236,
+          Number(vessel.current_lng) || 106.1858,
+        ];
+        const dest = getDestinationCoordinates(vessel.destination);
+        const midUtama: [number, number] = [(origin[0] + dest[0]) / 2, (origin[1] + dest[1]) / 2];
+
+        finalRoutes = [
+          { id: 1, name: "Rute Utama (Dinamis)", label: "UTAMA", type: "Aktif", coords: [origin, midUtama, dest] },
+          { id: 2, name: "AI Alternatif A", label: "ALT A", type: "Alternatif A", coords: [origin, [midUtama[0] + 1.5, midUtama[1] - 1.5], dest] },
+          { id: 3, name: "AI Alternatif B", label: "ALT B", type: "Alternatif B", coords: [origin, [midUtama[0] - 1.5, midUtama[1] + 1.5], dest] },
+        ];
+      }
+
+      return {
+        id: vessel.id,
+        name: vessel.id.replace(/-/g, " "),
+        destination: getFullDestinationName(vessel.destination),
+        color: vessel.status_color || "#22d3ee",
+        status: vessel.status,
+        routes: finalRoutes,
+      };
+    });
+  }, [fleetVesselsRaw, vesselRoutesRaw]);
+
+
+  const selectedVessel = useMemo(() => integratedFleetData[selectedIndex] || integratedFleetData[0], [integratedFleetData, selectedIndex]);
+  const currentRoute = useMemo(() => selectedVessel?.routes?.[activeRouteIndex] || selectedVessel?.routes?.[0], [selectedVessel, activeRouteIndex]);
+
+  // Reset rute variant ke Utama tiap kali ganti kapal
+  useEffect(() => {
+    setActiveRouteIndex(0);
+  }, [selectedIndex]);
+
+  // Realtime Telemetry Clock
+  useEffect(() => {
+    const updateClock = () => {
       const now = new Date();
-      setSyncTime(
-        `${String(now.getUTCHours()).padStart(2, "0")}:${String(
-          now.getUTCMinutes(),
-        ).padStart(2, "0")}:${String(now.getUTCSeconds()).padStart(2, "0")} UTC`,
-      );
+      setLastSync(`${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}:${String(now.getUTCSeconds()).padStart(2, "0")} UTC`);
     };
-
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
+    updateClock();
+    const timer = setInterval(updateClock, 1000);
+    return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setPlaybackIndex((current) => (current + 1) % routePlayback.length);
-    }, 3500);
-
-    return () => window.clearInterval(timer);
-  }, []);
-
+  // Map Initialization & Fix Error Zombie Map
   useEffect(() => {
     if (typeof window === "undefined" || mapInstanceRef.current) return;
-
     let cancelled = false;
 
     const initMap = () => {
-      if (cancelled || !mapContainerRef.current) return;
-
+      if (cancelled || !mapRef.current) return;
       const L = (window as any).L;
       if (!L) return;
-
       leafletRef.current = L;
 
-      const map = L.map(mapContainerRef.current, {
-        center: [20, -24],
-        zoom: 3,
-        zoomControl: false,
-        attributionControl: false,
-        worldCopyJump: true,
-      });
-
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        maxZoom: 19,
-      }).addTo(map);
-
-      const vesselIcon = L.divIcon({
-        className: "serena-route-marker",
-        html: `
-          <div class="route-marker-core">
-            <div class="route-marker-ring"></div>
-            <div class="route-marker-dot"></div>
-          </div>
-        `,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-      });
-
-      const targetIcon = L.divIcon({
-        className: "serena-target-marker",
-        html: `
-          <div class="target-marker-core">
-            <div class="target-marker-pulse"></div>
-            <div class="target-marker-dot"></div>
-          </div>
-        `,
-        iconSize: [26, 26],
-        iconAnchor: [13, 13],
-      });
-
-      const sourceIcon = L.divIcon({
-        className: "serena-source-marker",
-        html: `
-          <div class="source-marker-core">
-            <div class="source-marker-dot"></div>
-          </div>
-        `,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-      });
-
-      focusBoundsRef.current = L.latLngBounds([...activeRoute, ...recommendedRoute]);
-
-      L.marker([startNode.lat, startNode.lng], { icon: sourceIcon })
-        .addTo(map)
-        .bindPopup(
-          `
-            <div class="serena-popup">
-              <div class="popup-label">ORIGIN</div>
-              <div class="popup-title">${startNode.label}</div>
-            </div>
-          `,
-          { className: "serena-leaflet-popup", closeButton: false, minWidth: 170 },
-        );
-
-      L.marker([targetNode.lat, targetNode.lng], { icon: targetIcon })
-        .addTo(map)
-        .bindPopup(
-          `
-            <div class="serena-popup">
-              <div class="popup-label">TARGET</div>
-              <div class="popup-title">${targetNode.label}</div>
-            </div>
-          `,
-          { className: "serena-leaflet-popup", closeButton: false, minWidth: 170 },
-        );
-
-      L.polyline(activeRoute, {
-        color: "rgba(34,211,238,0.24)",
-        weight: 7,
-        opacity: 0.85,
-      }).addTo(map);
-
-      L.polyline(activeRoute, {
-        color: "#22d3ee",
-        weight: 2.5,
-        opacity: 0.95,
-        dashArray: "7 9",
-      }).addTo(map);
-
-      L.polyline(recommendedRoute, {
-        color: "rgba(196,181,253,0.24)",
-        weight: 8,
-        opacity: 0.85,
-      }).addTo(map);
-
-      L.polyline(recommendedRoute, {
-        color: "#d8b4fe",
-        weight: 3,
-        opacity: 0.92,
-      }).addTo(map);
-
-      livePulseRef.current = L.circleMarker(currentLocation, {
-        radius: 12,
-        color: "#22d3ee",
-        weight: 1,
-        opacity: 0.35,
-        fillColor: "#22d3ee",
-        fillOpacity: 0.1,
-      }).addTo(map);
-
-      liveMarkerRef.current = L.marker(currentLocation, { icon: vesselIcon }).addTo(map);
-      liveMarkerRef.current.bindPopup(
-        `
-          <div class="serena-popup">
-            <div class="popup-label">LIVE ROUTE MODEL</div>
-            <div class="popup-title">SS-VALIANT_OR82</div>
-            <div class="popup-row"><span>MODE</span><strong>OPTIMIZATION LIVE</strong></div>
-            <div class="popup-row"><span>TARGET</span><strong>${targetNode.label}</strong></div>
-          </div>
-        `,
-        { className: "serena-leaflet-popup", closeButton: false, minWidth: 210 },
-      );
-      liveMarkerRef.current.openPopup();
-
-      map.fitBounds(focusBoundsRef.current, { padding: [40, 40] });
+      const map = L.map(mapRef.current, { center: [5.0, 115.0], zoom: 4, zoomControl: false, attributionControl: false });
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(map);
       mapInstanceRef.current = map;
+
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 250);
+
+      setIsMapReady(true);
     };
 
-    if ((window as any).L) {
-      initMap();
-    } else {
+    if ((window as any).L) { initMap(); }
+    else {
       const existingLink = document.querySelector("link[data-serena-leaflet='true']");
       if (!existingLink) {
         const link = document.createElement("link");
@@ -306,7 +207,6 @@ export default function LogisticOptimazationPage() {
         link.setAttribute("data-serena-leaflet", "true");
         document.head.appendChild(link);
       }
-
       const script = document.createElement("script");
       script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
       script.async = true;
@@ -314,752 +214,242 @@ export default function LogisticOptimazationPage() {
       document.body.appendChild(script);
     }
 
-    return () => {
-      cancelled = true;
+    // FIX: Hapus instansiasi peta secara total saat unmount agar DOM bersih kembali
+    return () => { 
+      cancelled = true; 
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
-      liveMarkerRef.current = null;
-      livePulseRef.current = null;
-      focusBoundsRef.current = null;
     };
-  }, [currentLocation]);
+  }, []);
 
+  // Map Drawing Logic & Safe Polyline Drawing
   useEffect(() => {
-    if (!liveMarkerRef.current || !livePulseRef.current) return;
-    liveMarkerRef.current.setLatLng(currentLocation);
-    livePulseRef.current.setLatLng(currentLocation);
-  }, [currentLocation]);
+    if (!isMapReady) return;
 
-  const handleZoom = (mode: "in" | "out") => {
-    if (!mapInstanceRef.current) return;
-    if (mode === "in") {
-      mapInstanceRef.current.zoomIn();
-      return;
+    const map = mapInstanceRef.current;
+    const L = leafletRef.current;
+    
+    // FIX: Validasi map._container agar terhindar dari appendChild error pada strictmode
+    if (!map || !L || !selectedVessel || !currentRoute || !map._container || !currentRoute.coords || currentRoute.coords.length === 0) return;
+
+    if (routeLayerRef.current && map.hasLayer?.(routeLayerRef.current)) map.removeLayer(routeLayerRef.current);
+    if (originMarkerRef.current && map.hasLayer?.(originMarkerRef.current)) map.removeLayer(originMarkerRef.current);
+    if (destinationMarkerRef.current && map.hasLayer?.(destinationMarkerRef.current)) map.removeLayer(destinationMarkerRef.current);
+
+    const originCoord = currentRoute.coords[0];
+    const destCoord = currentRoute.coords[currentRoute.coords.length - 1];
+    
+    const isAiRoute = activeRouteIndex > 0;
+
+    // Gambar Polyline Lintasan Jalur (Dengan Garis Putus-Putus)
+    routeLayerRef.current = L.polyline(currentRoute.coords as [number, number][], { 
+      color: isAiRoute ? "#c084fc" : selectedVessel.color, 
+      weight: isAiRoute ? 4 : 3, 
+      opacity: 0.9, 
+      dashArray: "5, 10" // <--- Memastikan efek garis putus-putus
+    }).addTo(map);
+
+    // Titik Keberangkatan (Origin)
+    const originIcon = L.divIcon({
+      className: "serena-live-marker",
+      html: `<div class="marker-core active"><div class="marker-ring" style="border-color:${selectedVessel.color}"></div><div class="marker-dot" style="background:${selectedVessel.color}; box-shadow:0 0 14px ${selectedVessel.color}"></div></div>`,
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
+    });
+    originMarkerRef.current = L.marker(originCoord as [number, number], { icon: originIcon }).addTo(map);
+
+    // Titik Tujuan Pelabuhan (Destination)
+    const destIcon = L.divIcon({
+      className: "serena-live-marker",
+      html: `<div class="marker-core active"><div class="marker-ring" style="border-color:#4b5563"></div><div class="marker-dot" style="background:#2d3748;"></div></div>`,
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
+    });
+    destinationMarkerRef.current = L.marker(destCoord as [number, number], { icon: destIcon }).addTo(map);
+    
+    // Fit Bounds Autofocus Rute Pelayaran
+    try {
+      const bounds = L.latLngBounds(currentRoute.coords as [number, number][]);
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 6, animate: true, duration: 1.2 });
+      }
+    } catch (e) {
+      console.warn("Bounds Leaflet bermasalah", e);
     }
-    mapInstanceRef.current.zoomOut();
-  };
 
-  const handleRefocus = () => {
-    if (!mapInstanceRef.current || !focusBoundsRef.current) return;
-    mapInstanceRef.current.fitBounds(focusBoundsRef.current, { padding: [40, 40] });
-  };
+    // Cleanup layer on change/unmount
+    return () => {
+      const currentMap = mapInstanceRef.current;
+      if (!currentMap || !currentMap._container) return;
+
+      if (routeLayerRef.current && currentMap.hasLayer?.(routeLayerRef.current)) currentMap.removeLayer(routeLayerRef.current);
+      if (originMarkerRef.current && currentMap.hasLayer?.(originMarkerRef.current)) currentMap.removeLayer(originMarkerRef.current);
+      if (destinationMarkerRef.current && currentMap.hasLayer?.(destinationMarkerRef.current)) currentMap.removeLayer(destinationMarkerRef.current);
+    };
+  }, [selectedVessel, currentRoute, activeRouteIndex, isMapReady]);
+
+  // Loading UI Screen
+  if (isLoading || !Array.isArray(integratedFleetData) || integratedFleetData.length === 0) {
+    return (
+      <div style={{ background: "#0a0a10", color: apiError ? "#f87171" : "#22d3ee", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Orbitron, sans-serif", fontSize: "14px", letterSpacing: "0.1em", flexDirection: "column", gap: 10 }}>
+        <div>{apiError ? `API ERROR: ${apiError}` : "MENYINKRONKAN ARMADA DATABASE NEON..."}</div>
+      </div>
+    );
+  }
+
 
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;600;700;900&display=swap');
-
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         html,body{background:#0a0a10;color:#e5e7eb;font-family:'Rajdhani',sans-serif;min-height:100vh}
-
-        .rt-page{
-          min-height:calc(100vh - 46px);
-          padding:10px;
-          background:
-            radial-gradient(circle at top left, rgba(34,211,238,0.06), transparent 24%),
-            radial-gradient(circle at top right, rgba(168,85,247,0.08), transparent 22%),
-            #0a0a10;
-        }
-
-        .rt-layout{
-          display:grid;
-          grid-template-columns:minmax(0,1.6fr) minmax(360px,1fr);
-          gap:10px;
-          min-height:calc(100vh - 66px);
-        }
-
-        .panel{
-          position:relative;
-          overflow:hidden;
-          background:#0f0f1a;
-          border:1px solid rgba(255,255,255,0.07);
-          border-radius:6px;
-          box-shadow:0 18px 40px rgba(0,0,0,0.35);
-        }
-
-        .panel::before{
-          content:"";
-          position:absolute;
-          inset:0;
-          pointer-events:none;
-          background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent 28%);
-        }
-
-        .left-col,.right-col{
-          display:flex;
-          flex-direction:column;
-          gap:10px;
-          min-width:0;
-        }
-
-        .map-shell{
-          position:relative;
-          min-height:560px;
-          overflow:hidden;
-        }
-
-        #route-live-map{
-          position:absolute;
-          inset:0;
-          z-index:1;
-        }
-
-        .map-shade{
-          position:absolute;
-          inset:0;
-          z-index:2;
-          pointer-events:none;
-          background:
-            radial-gradient(circle at center, rgba(34,211,238,0.05), transparent 30%),
-            linear-gradient(180deg, rgba(3,7,18,0.14), rgba(3,7,18,0.34));
-        }
-
-        .map-grid{
-          position:absolute;
-          inset:0;
-          z-index:2;
-          pointer-events:none;
-          background:
-            linear-gradient(0deg, rgba(255,255,255,0.02) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-          background-size:42px 42px;
-          opacity:.55;
-        }
-
-        .legend-stack{
-          position:absolute;
-          top:14px;
-          left:14px;
-          display:flex;
-          flex-direction:column;
-          gap:8px;
-          z-index:5;
-        }
-
-        .legend-chip{
-          display:flex;
-          align-items:center;
-          gap:10px;
-          padding:9px 14px;
-          border-radius:999px;
-          border:1px solid rgba(255,255,255,0.08);
-          background:rgba(8,10,18,0.72);
-          backdrop-filter:blur(12px);
-        }
-
-        .legend-line{
-          width:34px;
-          height:3px;
-          border-radius:999px;
-          flex-shrink:0;
-        }
-
-        .legend-text,
-        .live-pill,
-        .eyebrow,
-        .footer-badge,
-        .telemetry-chip,
-        .control-btn,
-        .apply-btn{
-          font-family:'Share Tech Mono',monospace;
-          text-transform:uppercase;
-        }
-
-        .legend-text{
-          font-size:9px;
-          letter-spacing:.18em;
-          color:#d1d5db;
-          white-space:nowrap;
-        }
-
-        .telemetry-chip{
-          position:absolute;
-          top:14px;
-          right:14px;
-          z-index:5;
-          display:flex;
-          flex-direction:column;
-          align-items:flex-end;
-          gap:4px;
-          padding:10px 14px;
-          border-radius:6px;
-          border:1px solid rgba(255,255,255,0.08);
-          background:rgba(8,10,18,0.78);
-          backdrop-filter:blur(12px);
-        }
-
-        .telemetry-chip span:first-child{
-          font-size:8px;
-          letter-spacing:.18em;
-          color:#22d3ee;
-        }
-
-        .telemetry-chip span:last-child{
-          font-size:10px;
-          color:#e5e7eb;
-          letter-spacing:.12em;
-        }
-
-        .map-controls{
-          position:absolute;
-          right:14px;
-          bottom:110px;
-          z-index:5;
-          display:flex;
-          flex-direction:column;
-          gap:8px;
-        }
-
-        .control-btn{
-          width:34px;
-          height:34px;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          border:none;
-          border-radius:6px;
-          background:rgba(8,10,18,0.82);
-          border:1px solid rgba(255,255,255,0.12);
-          color:#22d3ee;
-          cursor:pointer;
-          font-size:17px;
-          transition:all .2s ease;
-        }
-
-        .control-btn:hover{
-          background:rgba(168,85,247,0.22);
-          border-color:rgba(196,181,253,0.28);
-          color:#f5f3ff;
-        }
-
-        .insight-wrap{
-          position:absolute;
-          left:14px;
-          right:14px;
-          bottom:14px;
-          z-index:5;
-        }
-
-        .insight-panel{
-          display:flex;
-          align-items:center;
-          justify-content:space-between;
-          gap:18px;
-          padding:18px 20px;
-          border-radius:6px;
-          border:1px solid rgba(196,181,253,0.22);
-          background:linear-gradient(135deg, rgba(168,85,247,0.18), rgba(255,255,255,0.05));
-          backdrop-filter:blur(14px);
-          box-shadow:0 12px 35px rgba(88,28,135,0.22);
-        }
-
-        .insight-left{
-          display:flex;
-          align-items:flex-start;
-          gap:14px;
-          min-width:0;
-        }
-
-        .icon-box{
-          width:42px;
-          height:42px;
-          border-radius:6px;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          flex-shrink:0;
-          border:1px solid rgba(196,181,253,0.2);
-          background:rgba(168,85,247,0.12);
-          color:#e9d5ff;
-        }
-
-        .insight-title{
-          font-size:15px;
-          font-weight:600;
-          color:#f5f3ff;
-          margin-bottom:4px;
-        }
-
-        .insight-text{
-          font-size:13px;
-          line-height:1.55;
-          color:#d1d5db;
-          max-width:650px;
-        }
-
-        .apply-btn{
-          border:none;
-          border-radius:6px;
-          padding:12px 18px;
-          background:#e9d5ff;
-          color:#581c87;
-          font-size:10px;
-          letter-spacing:.16em;
-          cursor:pointer;
-          font-weight:700;
-          white-space:nowrap;
-          box-shadow:0 0 24px rgba(196,181,253,0.35);
-        }
-
-        .map-footer{
-          display:flex;
-          flex-wrap:wrap;
-          gap:8px;
-        }
-
-        .footer-badge{
-          display:flex;
-          align-items:center;
-          gap:6px;
-          padding:9px 14px;
-          border-radius:999px;
-          border:1px solid rgba(255,255,255,0.08);
-          background:rgba(255,255,255,0.03);
-          backdrop-filter:blur(12px);
-          font-size:9px;
-          letter-spacing:.16em;
-          color:#6b7280;
-        }
-
-        .footer-badge strong{
-          font-weight:700;
-        }
-
-        .kpi-card{
-          display:flex;
-          flex-direction:column;
-          align-items:center;
-          justify-content:center;
-          min-height:196px;
-          padding:24px 22px;
-          text-align:center;
-        }
-
-        .kpi-top{
-          width:100%;
-          display:flex;
-          align-items:flex-start;
-          justify-content:space-between;
-          margin-bottom:30px;
-        }
-
-        .eyebrow{
-          font-size:9px;
-          letter-spacing:.24em;
-          color:#6b7280;
-        }
-
-        .gauge-box{
-          width:34px;
-          height:34px;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          border-radius:6px;
-          border:1px solid rgba(34,211,238,0.18);
-          background:rgba(34,211,238,0.08);
-          color:#22d3ee;
-        }
-
-        .kpi-value{
-          font-family:'Orbitron',sans-serif;
-          font-size:58px;
-          line-height:1;
-          color:#22d3ee;
-          text-shadow:0 0 20px rgba(34,211,238,0.35);
-        }
-
-        .kpi-value small{
-          font-size:20px;
-        }
-
-        .delta-badge{
-          margin-top:16px;
-          display:inline-flex;
-          align-items:center;
-          justify-content:center;
-          padding:6px 12px;
-          border-radius:999px;
-          border:1px solid rgba(74,222,128,0.14);
-          background:rgba(34,197,94,0.08);
-          color:#4ade80;
-          font-family:'Share Tech Mono',monospace;
-          font-size:9px;
-          letter-spacing:.14em;
-          text-transform:uppercase;
-        }
-
-        .metric-grid{
-          display:grid;
-          grid-template-columns:1fr 1fr;
-          gap:10px;
-        }
-
-        .metric-card{
-          padding:18px 18px 16px;
-          min-height:122px;
-        }
-
-        .metric-value{
-          margin-top:24px;
-          font-family:'Orbitron',sans-serif;
-          font-size:36px;
-          line-height:1;
-          letter-spacing:.02em;
-        }
-
-        .metric-caption{
-          margin-top:8px;
-          font-size:12px;
-          color:#6b7280;
-        }
-
-        .table-card{
-          padding:18px;
-        }
-
-        .table-head{
-          display:flex;
-          align-items:center;
-          justify-content:space-between;
-          padding-bottom:14px;
-          border-bottom:1px solid rgba(255,255,255,0.07);
-        }
-
-        .live-pill{
-          padding:4px 10px;
-          border-radius:999px;
-          border:1px solid rgba(255,255,255,0.08);
-          font-size:9px;
-          letter-spacing:.14em;
-          color:#6b7280;
-        }
-
-        table{
-          width:100%;
-          border-collapse:collapse;
-          margin-top:12px;
-        }
-
-        th{
-          text-align:left;
-          padding:12px 14px;
-          background:rgba(255,255,255,0.02);
-          border-bottom:1px solid rgba(255,255,255,0.05);
-          font-family:'Share Tech Mono',monospace;
-          font-size:9px;
-          letter-spacing:.18em;
-          text-transform:uppercase;
-          color:#6b7280;
-          font-weight:400;
-        }
-
-        td{
-          padding:14px;
-          border-bottom:1px solid rgba(255,255,255,0.05);
-          font-size:13px;
-          color:#e5e7eb;
-        }
-
-        tbody tr:last-child td{border-bottom:none}
-        .param{color:#9ca3af}
-        .ai-col{color:#e9d5ff}
-        .rating{display:flex;align-items:center;gap:4px}
-
-        .serena-route-marker,
-        .serena-target-marker,
-        .serena-source-marker{
-          background:none !important;
-          border:none !important;
-        }
-
-        .route-marker-core{
-          position:relative;
-          width:28px;
-          height:28px;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-        }
-
-        .route-marker-ring{
-          position:absolute;
-          inset:0;
-          border-radius:999px;
-          border:1px solid rgba(34,211,238,0.45);
-          animation:pulse 1.8s ease-in-out infinite;
-        }
-
-        .route-marker-dot{
-          width:10px;
-          height:10px;
-          border-radius:50%;
-          background:#22d3ee;
-          box-shadow:0 0 16px rgba(34,211,238,0.9);
-        }
-
-        .target-marker-core,
-        .source-marker-core{
-          position:relative;
-          width:26px;
-          height:26px;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-        }
-
-        .target-marker-pulse{
-          position:absolute;
-          inset:0;
-          border-radius:999px;
-          background:rgba(216,180,254,0.18);
-          animation:pulse 1.8s ease-in-out infinite;
-        }
-
-        .target-marker-dot{
-          width:8px;
-          height:8px;
-          border-radius:50%;
-          background:#f5f3ff;
-          box-shadow:0 0 14px rgba(216,180,254,0.8);
-        }
-
-        .source-marker-dot{
-          width:8px;
-          height:8px;
-          border-radius:50%;
-          background:#4ade80;
-          box-shadow:0 0 10px rgba(74,222,128,0.75);
-        }
-
-        .serena-leaflet-popup .leaflet-popup-content-wrapper{
-          background:rgba(9,12,20,0.92);
-          color:#e5e7eb;
-          border:1px solid rgba(255,255,255,0.08);
-          border-radius:6px;
-          box-shadow:0 18px 40px rgba(0,0,0,0.4);
-          backdrop-filter:blur(12px);
-        }
-
-        .serena-leaflet-popup .leaflet-popup-tip{
-          background:rgba(9,12,20,0.92);
-          border:1px solid rgba(255,255,255,0.08);
-        }
-
-        .serena-popup{
-          font-family:'Rajdhani',sans-serif;
-          min-width:150px;
-        }
-
-        .popup-label{
-          font-family:'Share Tech Mono',monospace;
-          font-size:8px;
-          letter-spacing:.18em;
-          color:#22d3ee;
-          text-transform:uppercase;
-        }
-
-        .popup-title{
-          margin-top:6px;
-          font-size:14px;
-          font-weight:700;
-          color:#fff;
-        }
-
-        .popup-row{
-          display:flex;
-          justify-content:space-between;
-          gap:16px;
-          margin-top:8px;
-          font-size:11px;
-          color:#cbd5e1;
-        }
-
-        .popup-row span{
-          color:#64748b;
-          text-transform:uppercase;
-          letter-spacing:.12em;
-          font-size:9px;
-        }
-
-        @keyframes pulse{
-          0%,100%{transform:scale(1);opacity:.5}
-          50%{transform:scale(1.18);opacity:.15}
-        }
-
-        @media (max-width: 1180px){
-          .rt-layout{grid-template-columns:1fr}
-        }
-
-        @media (max-width: 720px){
-          .rt-page{padding:8px}
-          .metric-grid{grid-template-columns:1fr}
-          .map-shell{min-height:520px}
-          .insight-panel{flex-direction:column;align-items:flex-start}
-          .apply-btn{width:100%}
-          .insight-wrap{left:10px;right:10px;bottom:10px}
-          .legend-stack{left:10px;top:10px}
-          .map-controls{right:10px;bottom:132px}
-          .map-footer{gap:6px}
-          .footer-badge{width:100%;justify-content:flex-start}
-          .telemetry-chip{right:10px;top:auto;bottom:10px}
-        }
+        .live-root{position:relative;min-height:calc(100vh - 46px);background:#0a0a10;overflow:hidden}
+        .live-map{position:relative;height:calc(100vh - 46px);min-height:680px;overflow:hidden}
+        #live-map-canvas{position:absolute;inset:0;z-index:1}
+        .map-shade{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(circle at 30% 20%, rgba(34,211,238,0.06), transparent 20%),linear-gradient(180deg, rgba(3,6,14,0.1) 0%, rgba(3,6,14,0.4) 100%)}
+        
+        .left-panel{position:absolute;top:16px;left:16px;z-index:20;width:350px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:rgba(10,10,20,0.85);backdrop-filter:blur(12px);box-shadow:0 16px 35px rgba(0,0,0,0.4);overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 80px)}
+        .panel-header{padding:18px;border-bottom:1px solid rgba(255,255,255,0.06)}
+        .panel-title{font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:.14em;color:#858594;text-transform:uppercase;margin-bottom:12px}
+        
+        .vessel-selector{display:flex;flex-direction:column;gap:6px}
+        .vessel-btn{width:100%;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:4px;color:#9ca3af;font-family:'Orbitron',sans-serif;font-size:11px;font-weight:600;letter-spacing:.05em;text-align:left;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:space-between}
+        .vessel-btn.active{background:rgba(34,211,238,0.08);border-color:#22d3ee;color:#fff;box-shadow:inset 0 0 8px rgba(34,211,238,0.15)}
+        .vessel-indicator{width:6px;height:6px;border-radius:50%;margin-right:10px;display:inline-block}
+
+        .panel-body{padding:18px;display:flex;flex-direction:column;gap:16px;overflow-y:auto}
+        
+        /* UI SWAP CONTROL SEGMENTED TAB STYLE */
+        .swap-wrapper{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:4px;display:flex;position:relative}
+        .swap-item{flex:1;text-align:center;padding:8px 0;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.05em;color:#6b7280;cursor:pointer;z-index:2;transition:color 0.2s;text-transform:uppercase}
+        .swap-item.active{color:#fff}
+        .swap-slider{position:absolute;top:4px;bottom:4px;border-radius:4px;transition:all 0.25s cubic-bezier(0.4, 0, 0.2, 1);z-index:1}
+
+        .route-info{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:14px}
+        .ri-label{font-family:'Share Tech Mono';font-size:9px;color:#6b7280;text-transform:uppercase;margin-bottom:4px}
+        .ri-value{font-size:14px;color:#fff;font-weight:600}
+
+        .top-chip{position:absolute;top:16px;right:16px;z-index:20}
+        .telemetry-chip{padding:10px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:rgba(10,10,20,0.84);backdrop-filter:blur(12px);text-align:right}
+        .telemetry-label{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:.18em;color:#22d3ee;text-transform:uppercase}
+        .telemetry-time{margin-top:4px;font-family:'Share Tech Mono',monospace;font-size:10px;color:#e5e7eb}
+
+        .controls{position:absolute;right:16px;bottom:22px;z-index:20;display:flex;flex-direction:column;gap:8px}
+        .control-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid rgba(255,255,255,0.14);background:rgba(10,10,20,0.88);color:#22d3ee;cursor:pointer;font-size:18px}
+        .control-btn:hover{background:#a855f7;color:#fff}
+
+        .serena-live-marker{background:none !important;border:none !important}
+        .marker-core{position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center}
+        .marker-ring{position:absolute;width:100%;height:100%;border-radius:50%;border:2px solid;opacity:0}
+        .marker-core.active .marker-ring{animation:pulse 1.5s infinite}
+        .marker-dot{width:10px;height:10px;border-radius:50%;z-index:2}
+        
+        @keyframes pulse{0%{transform:scale(.6);opacity:1}100%{transform:scale(2.2);opacity:0}}
       `}</style>
 
       <PrimeTopbar />
-
-      <main className="rt-page">
-        <div className="rt-layout">
-          <div className="left-col">
-            <div className="panel map-shell">
-              <div id="route-live-map" ref={mapContainerRef} />
-              <div className="map-shade" />
-              <div className="map-grid" />
-
-              <div className="legend-stack">
-                {legends.map((legend) => (
-                  <div key={legend.label} className="legend-chip">
-                    <span
-                      className="legend-line"
-                      style={{
-                        background: legend.color,
-                        boxShadow: `0 0 14px ${legend.color}`,
-                      }}
-                    />
-                    <span className="legend-text">{legend.label}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="telemetry-chip">
-                <span>LIVE ROUTE TELEMETRY</span>
-                <span>{syncTime}</span>
-              </div>
-
-              <div className="map-controls">
-                <button type="button" className="control-btn" onClick={() => handleZoom("in")}>
-                  +
-                </button>
-                <button type="button" className="control-btn" onClick={() => handleZoom("out")}>
-                  -
-                </button>
-                <button type="button" className="control-btn" onClick={handleRefocus}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
-                    <circle cx="12" cy="12" r="8" />
-                    <path d="m12 7 2 5-5 2" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="insight-wrap">
-                <div className="insight-panel">
-                  <div className="insight-left">
-                    <div className="icon-box">
-                      <SparkleIcon />
-                    </div>
-                    <div>
-                      <div className="insight-title">AI Recommendation Insight</div>
-                      <div className="insight-text">
-                        Saran AI: Ambil Rute via Arus Atlantik Utara untuk hemat
-                        12% bahan bakar. Cuaca stabil. Estimasi kedatangan 6 jam
-                        lebih awal.
+      
+      <main className="live-root">
+        <section className="live-map">
+          <div id="live-map-canvas" ref={mapRef} />
+          <div className="map-shade" />
+          
+          <aside className="left-panel">
+            <div className="panel-header">
+              <div className="panel-title">FLEET MANAGEMENT LIST</div>
+              <div className="vessel-selector">
+                {integratedFleetData.map((v, idx) => (
+                  <button 
+                    key={v.id} 
+                    className={`vessel-btn ${idx === selectedIndex ? "active" : ""}`}
+                    onClick={() => setSelectedIndex(idx)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span className="vessel-indicator" style={{ background: v.color }} />
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '11px', color: idx === selectedIndex ? '#fff' : '#d1d5db' }}>{v.name}</span>
+                        <span style={{ fontSize: '9px', color: '#6b7280', marginTop: '2px' }}>{v.destination}</span>
                       </div>
                     </div>
-                  </div>
-
-                  <button type="button" className="apply-btn">
-                    Terapkan Rute
                   </button>
-                </div>
+                ))}
               </div>
             </div>
-
-            <div className="map-footer">
-              {routeBadges.map((badge) => (
-                <div key={badge.label} className="footer-badge">
-                  <span>{badge.label}:</span>
-                  <strong style={{ color: badge.accent }}>{badge.value}</strong>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="right-col">
-            <div className="panel kpi-card">
-              <div className="kpi-top">
-                <div className="eyebrow">SKOR EFISIENSI ARMADA</div>
-                <div className="gauge-box">
-                  <GaugeIcon />
+            
+            <div className="panel-body">
+              <div className="route-info">
+                <div className="ri-label">Status Navigasi</div>
+                <div className="ri-value" style={{ color: selectedVessel?.status === "WEATHER DELAY" ? "#f87171" : "#4ade80" }}>
+                  {selectedVessel?.status}
                 </div>
               </div>
 
-              <div className="kpi-value">
-                92<small>%</small>
-              </div>
-              <div className="delta-badge">+4.2% dari kemarin</div>
-            </div>
-
-            <div className="metric-grid">
-              {metricCards.map((metric) => (
-                <div key={metric.label} className="panel metric-card">
-                  <div className="eyebrow">{metric.label}</div>
-                  <div className="metric-value" style={{ color: metric.tone }}>
-                    {metric.value}
-                  </div>
-                  <div className="metric-caption">{metric.caption}</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="panel table-card">
-              <div className="table-head">
-                <div className="eyebrow">PERBANDINGAN PERFORMA RUTE</div>
-                <div className="live-pill">LIVE</div>
-              </div>
-
-              <table>
-                <thead>
-                  <tr>
-                    <th>Parameter</th>
-                    <th>Route Active</th>
-                    <th>Route AI</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {routeComparison.map((row) => (
-                    <tr key={row.parameter}>
-                      <td className="param">{row.parameter}</td>
-                      <td>
-                        {row.type === "rating" ? (
-                          <div className="rating">
-                            {Array.from({ length: 5 }, (_, index) => (
-                              <Star key={index} filled={index < row.active} color="#fbbf24" />
-                            ))}
-                          </div>
-                        ) : (
-                          row.active
-                        )}
-                      </td>
-                      <td className="ai-col">
-                        {row.type === "rating" ? (
-                          <div className="rating">
-                            {Array.from({ length: 5 }, (_, index) => (
-                              <Star key={index} filled={index < row.ai} color="#d8b4fe" />
-                            ))}
-                          </div>
-                        ) : (
-                          row.ai
-                        )}
-                      </td>
-                    </tr>
+              {/* PANEL COMPONENT SWAP VARIANT */}
+              <div>
+                <div className="ri-label" style={{ marginBottom: "6px" }}>SWAP ROUTE VARIANT</div>
+                <div className="swap-wrapper">
+                  {selectedVessel?.routes?.map((route, rIdx) => (
+                    <div
+                      key={`${route.id}-${rIdx}`}
+                      className={`swap-item ${rIdx === activeRouteIndex ? "active" : ""}`}
+                      onClick={() => setActiveRouteIndex(rIdx)}
+                    >
+                      {route.label}
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                  {/* Slide Slider Indicator */}
+                  <div 
+                    className="swap-slider" 
+                    style={{
+                      left: `calc(${activeRouteIndex} * 33.33% + 4px)`,
+                      width: "calc(33.33% - 8px)",
+                      background: activeRouteIndex === 0 ? "rgba(34,211,238,0.15)" : "rgba(192,132,252,0.22)",
+                      border: `1px solid ${activeRouteIndex === 0 ? "#22d3ee" : "#c084fc"}`
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Tampilan Konten Dinamis Berdasarkan Hasil Swap */}
+              <div className="route-info" style={{ 
+                borderLeft: `3px solid ${activeRouteIndex > 0 ? "#c084fc" : selectedVessel?.color}`,
+                background: activeRouteIndex > 0 ? "rgba(192,132,252,0.03)" : "rgba(255,255,255,0.01)"
+              }}>
+                <div className="ri-label" style={{ color: activeRouteIndex > 0 ? "#c084fc" : selectedVessel?.color }}>
+                  {activeRouteIndex > 0 ? "OPTIMISASI AI AKTIF" : "RUTE JALUR STANDAR"}
+                </div>
+                <div className="ri-value" style={{ fontSize: 13 }}>
+                  {currentRoute?.name}
+                </div>
+                <p style={{ fontSize: 11, color: "#9ca3af", marginTop: "6px", lineHeight: 1.4 }}>
+                  {activeRouteIndex === 0 && selectedVessel?.status === "WEATHER DELAY" 
+                    ? "⚠️ Jalur ini mendeteksi cuaca buruk. Silakan swap panel di atas ke ALT A atau ALT B untuk mengubah arah koordinat kapal otomatis."
+                    : activeRouteIndex === 1
+                    ? "✨ Optimisasi Rute AI: Koordinat kapal digeser menjauhi pusat tekanan badai berawan tinggi."
+                    : activeRouteIndex === 2 
+                    ? "🔋 Mode Efisiensi: Jalur navigasi alternatif disesuaikan untuk menghemat konsumsi bahan bakar kapal."
+                    : "Jalur rute utama berjalan normal, aman dan terpantau radar maritim."}
+                </p>
+              </div>
+
+            </div>
+          </aside>
+
+          <div className="top-chip">
+            <div className="telemetry-chip">
+              <div className="telemetry-label">AI ROUTE TELEMETRY</div>
+              <div className="telemetry-time">CLOCK: {lastSync}</div>
             </div>
           </div>
-        </div>
+
+          <div className="controls">
+            <button type="button" className="control-btn" onClick={() => mapInstanceRef.current?.zoomIn()}>+</button>
+            <button type="button" className="control-btn" onClick={() => mapInstanceRef.current?.zoomOut()}>-</button>
+          </div>
+        </section>
       </main>
     </>
   );
