@@ -90,8 +90,15 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
   // Handler Buka Modal Edit
   const handleOpenEdit = (record: CargoRecord) => {
     setEditingId(record.id);
+
+    // Logika untuk merubah format ISO/Database tanggal ke YYYY-MM-DD agar sinkron dengan input HTML
+    const rawDate = record.shippingDate ? new Date(record.shippingDate) : null;
+    const formattedShippingDate = rawDate && !isNaN(rawDate.getTime())
+      ? `${rawDate.getFullYear()}-${String(rawDate.getMonth() + 1).padStart(2, '0')}-${String(rawDate.getDate()).padStart(2, '0')}`
+      : "";
+
     setFormData({
-      shippingDate: record.shippingDate || "",
+      shippingDate: formattedShippingDate, // Di sini tanggal disinkronkan otomatis saat tombol diklik
       senderName: record.senderName || "",
       recipientName: record.recipientName || "",
       phone: record.phone || "",

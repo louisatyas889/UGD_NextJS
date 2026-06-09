@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Orbitron, Rajdhani } from "next/font/google";
+import { revalidatePath } from "next/cache";
 import PrimeTopbar from "../ui/PrimeTopbar";
+import { requireSession, recordSecurityLog } from "@/app/lib/auth";
+import { getSql } from "../lib/db";
 
 export const metadata: Metadata = {
   title: "Profile | Serena Sail",
-  description: "Halaman profil pengguna yang menampilkan detail sesi dan informasi peran.",
+  description: "Halaman profil pengguna untuk melihat & mengubah data diri.",
 };
 
 const orbitron = Orbitron({
@@ -18,48 +21,38 @@ const rajdhani = Rajdhani({
   weight: ["400", "500", "600", "700"],
 });
 
-const profile = {
-  name: "Louisa Ardhana",
-  role: "System Administrator",
-  code: "LOUISA-ADMIN-0909",
-  email: "louisa@serenasail.local",
-  region: "SOUTH ASIA COMMAND",
-  shift: "06:00 - 14:00 UTC",
-  status: "ONLINE",
-  initials: "LA",
-};
+// SERVER ACTION: Update nama user dan otomatis set avatar dari huruf pertama
+async function updateNameAvatarAction(formData: FormData) {
+  "use server";
+  const newName = (formData.get("name") as string | null)?.trim() ?? "";
+  const userId = formData.get("userId") as string | null;
 
-const stats = [
-  { label: "Access Level", value: "ROOT-07", tone: "cyan" },
-  { label: "Fleet Scope", value: "42 Units", tone: "white" },
-  { label: "Alerts Cleared", value: "128", tone: "violet" },
-  { label: "Auth Layer", value: "SECURED", tone: "magenta" },
-] as const;
+  if (!userId) return;
+  if (!newName || newName.length < 2) return;
 
-const activities = [
-  {
-    title: "Session validated from command deck",
-    time: "10:42 UTC",
-    accent: "cyan",
-  },
-  {
-    title: "Fleet route permissions synchronized",
-    time: "09:18 UTC",
-    accent: "violet",
-  },
-  {
-    title: "Security audit completed with no anomaly",
-    time: "08:05 UTC",
-    accent: "white",
-  },
-] as const;
+  const autoAvatar = newName.charAt(0).toUpperCase();
 
-const settings = [
-  { label: "Multi-factor authentication", value: "Enabled" },
-  { label: "Biometric access token", value: "Active" },
-  { label: "Command channel priority", value: "High" },
-  { label: "Emergency override", value: "Restricted" },
-] as const;
+  try {
+    const sql = getSql();
+    await sql`
+      UPDATE app_users
+      SET name = ${newName},
+          avatar = ${autoAvatar},
+          updated_at = NOW()
+      WHERE id = ${userId}
+    `;
+    await recordSecurityLog({
+      actor: userId,
+      action: "OTHER",
+      severity: "INFO",
+      message: `✎ Profile updated: name diubah oleh ${userId}`,
+    });
+    revalidatePath("/profile");
+    revalidatePath("/admin");
+  } catch (error) {
+    console.error("updateNameAvatarAction error:", error);
+  }
+}
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -85,50 +78,46 @@ function Panel({
   );
 }
 
-function StatCard({
-  item,
-}: {
-  item: (typeof stats)[number];
-}) {
-  const tones = {
-    cyan: "text-cyan-300",
-    white: "text-white",
-    violet: "text-violet-300",
-    magenta: "text-fuchsia-300",
-  } as const;
+export default async function ProfilePage() {
+  const session = await requireSession();
+  const isAdmin = !["STANDARD", "GUEST"].includes(session.role.toUpperCase());
 
-  return (
-    <Panel className="p-5">
-      <p
-        className={cn(
-          orbitron.className,
-          "text-[10px] uppercase tracking-[0.26em] text-slate-500",
-        )}
-      >
-        {item.label}
-      </p>
-      <p
-        className={cn(
-          orbitron.className,
-          "mt-5 text-2xl tracking-[0.06em]",
-          tones[item.tone],
-        )}
-      >
-        {item.value}
-      </p>
-    </Panel>
-  );
-}
+  const sql = getSql();
+  const result = await sql`
+    SELECT id, name, role, status, avatar, "key", last_login_at, last_logout_at, created_at
+    FROM app_users
+    WHERE id = ${session.id}
+  `;
+  const user = result[0] || null;
 
-export default function ProfilePage() {
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0a0a10] text-white">
+        <h2 className={orbitron.className}>User data not found in database.</h2>
+      </div>
+    );
+  }
+
+  const initials = user.name
+    ? user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+    : user.avatar || "U";
+
+  const roleText =
+    user.role === "SYS-ADMIN" ? "System Administrator" :
+    user.role === "FLEET-MANAGER" ? "Fleet Manager" :
+    user.role === "ADMIN" ? "Administrator" :
+    "Standard User";
+
+  const operatorCode = user.key ? `${user.id.toUpperCase()}-${user.key}` : user.id.toUpperCase();
+  const emailPlaceholder = `${user.name.toLowerCase().replace(/\s+/g, "")}@serenasail.local`;
+
   return (
     <>
       <PrimeTopbar />
-
       <main
         className={cn(
           rajdhani.className,
-          "relative min-h-[calc(100vh-46px)] overflow-hidden bg-[#0a0a10] text-white",
+          "relative min-h-[calc(100vh-46px)] overflow-hidden bg-[#0a0a10] text-white flex flex-col justify-start pt-8 pb-12",
         )}
       >
         <div
@@ -147,177 +136,148 @@ export default function ProfilePage() {
           }}
         />
 
-        <div className="relative z-10 mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
-          <header className="border-b border-white/6 pb-6">
-            <p
-              className={cn(
-                orbitron.className,
-                "text-[10px] uppercase tracking-[0.32em] text-fuchsia-300/80",
-              )}
+        <div className="relative z-10 mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-4 sm:px-6 lg:px-8">
+          <header className="border-b border-white/6 pb-4 flex items-end justify-between flex-wrap gap-3">
+            <div>
+              <p className={cn(orbitron.className, "text-[10px] uppercase tracking-[0.32em] text-fuchsia-300/80")}>
+                Operator Profile
+              </p>
+              <h1 className={cn(orbitron.className, "mt-2 text-2xl font-semibold tracking-[0.08em] text-white")}>
+                Profile Center
+              </h1>
+              <p className="mt-1 text-sm text-slate-400">
+                Kelola informasi akun dan avatar kamu.
+                {isAdmin && <span className="ml-2 text-cyan-300">[Mode: Administrator]</span>}
+              </p>
+            </div>
+            <a
+              href={isAdmin ? "/admin" : "/dashboard"}
+              style={{
+                fontSize: 10, padding: "8px 14px", background: "rgba(34,211,238,0.1)",
+                border: "1px solid rgba(34,211,238,0.25)", color: "#22d3ee",
+                fontFamily: "Share Tech Mono", letterSpacing: "0.1em", textTransform: "uppercase",
+              }}
             >
-              Operator Profile
-            </p>
-            <h1
-              className={cn(
-                orbitron.className,
-                "mt-3 text-3xl font-semibold tracking-[0.08em] text-white sm:text-4xl",
-              )}
-            >
-              Profile Center
-            </h1>
-            <p className="mt-3 max-w-2xl text-base text-slate-400 sm:text-lg">
-              Personal command overview, access status, and security profile for
-              the currently authenticated operator.
-            </p>
+              ← {isAdmin ? "Admin Panel" : "Dashboard"}
+            </a>
           </header>
 
-          <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-            <Panel className="p-6">
-              <div className="flex flex-col items-center border-b border-white/6 pb-6 text-center">
-                <div className="flex h-24 w-24 items-center justify-center rounded-full border border-cyan-300/25 bg-cyan-400/10 text-2xl font-semibold text-cyan-200 shadow-[0_0_24px_rgba(34,211,238,0.16)]">
-                  {profile.initials}
+          {/* PANEL 1: Identitas */}
+          <Panel className="p-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-center lg:items-stretch">
+              <div className="flex flex-col items-center justify-center text-center lg:border-r lg:border-white/10 lg:pr-10 pb-8 lg:pb-0">
+                <div className="flex h-28 w-28 items-center justify-center rounded-full border border-cyan-300/25 bg-cyan-400/10 text-3xl font-semibold text-cyan-200 shadow-[0_0_24px_rgba(34,211,238,0.16)]">
+                  {initials}
                 </div>
-                <h2
-                  className={cn(
-                    orbitron.className,
-                    "mt-5 text-xl tracking-[0.06em] text-white",
-                  )}
-                >
-                  {profile.name}
-                </h2>
-                <p className="mt-2 text-base text-slate-400">{profile.role}</p>
-                <span className="mt-4 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-[10px] uppercase tracking-[0.24em] text-cyan-200">
-                  {profile.status}
+                <form action={updateNameAvatarAction} className="mt-6 w-full flex flex-col items-center gap-3">
+                  <input type="hidden" name="userId" value={user.id} />
+                  <div className="w-full max-w-xs">
+                    <label className="block text-left text-[9px] uppercase tracking-[0.2em] text-slate-500 mb-1">
+                      Nama Lengkap
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      defaultValue={user.name}
+                      placeholder="Enter Name..."
+                      required
+                      className={cn(
+                        orbitron.className,
+                        "w-full bg-transparent border-b border-white/10 text-center text-xl tracking-[0.06em] text-white focus:border-cyan-300 focus:outline-none pb-1 transition-colors"
+                      )}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="mt-2 rounded bg-cyan-500/10 px-5 py-1.5 text-[10px] uppercase tracking-[0.2em] text-cyan-300 border border-cyan-400/20 hover:bg-cyan-500/20 transition-all cursor-pointer"
+                  >
+                    Save Changes
+                  </button>
+                </form>
+
+                <p className="mt-4 text-base text-slate-400">{roleText}</p>
+                <span className="mt-3 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-1 text-[10px] uppercase tracking-[0.24em] text-cyan-200">
+                  {user.status ? user.status.toUpperCase() : "ACTIVE"}
                 </span>
               </div>
 
-              <div className="space-y-4 pt-6">
-                {[
-                  { label: "Operator Code", value: profile.code },
-                  { label: "Email", value: profile.email },
-                  { label: "Command Region", value: profile.region },
-                  { label: "Assigned Shift", value: profile.shift },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className="border-b border-white/5 pb-4 last:border-b-0 last:pb-0"
-                  >
-                    <p
-                      className={cn(
-                        orbitron.className,
-                        "text-[10px] uppercase tracking-[0.24em] text-slate-500",
-                      )}
+              <div className="lg:col-span-2 flex flex-col justify-center">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                  {[
+                    { label: "Operator Code", value: operatorCode },
+                    { label: "Email", value: emailPlaceholder },
+                    { label: "User ID", value: user.id },
+                    { label: "Last Login", value: user.last_login_at ? new Date(user.last_login_at).toLocaleString("id-ID") : "—" },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="border border-white/5 bg-white/[0.01] rounded-[4px] p-5 relative overflow-hidden group"
                     >
-                      {item.label}
-                    </p>
-                    <p className="mt-2 text-base text-slate-200">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </Panel>
-
-            <div className="flex flex-col gap-6">
-              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {stats.map((item) => (
-                  <StatCard key={item.label} item={item} />
-                ))}
-              </section>
-
-              <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
-                <Panel className="p-6">
-                  <div className="flex items-center justify-between border-b border-white/6 pb-4">
-                    <div>
-                      <p
-                        className={cn(
-                          orbitron.className,
-                          "text-[10px] uppercase tracking-[0.26em] text-cyan-300/80",
-                        )}
-                      >
-                        Recent Activity
+                      <div className="pointer-events-none absolute left-0 top-0 h-full w-[2px] bg-cyan-500/30 group-hover:bg-cyan-400 transition-colors" />
+                      <p className={cn(orbitron.className, "text-[10px] uppercase tracking-[0.24em] text-slate-500")}>
+                        {item.label}
                       </p>
-                      <h3
-                        className={cn(
-                          orbitron.className,
-                          "mt-2 text-xl tracking-[0.05em] text-white",
-                        )}
-                      >
-                        Session timeline
-                      </h3>
+                      <p className="mt-2 text-lg text-slate-200 font-medium tracking-[0.02em]">
+                        {item.value}
+                      </p>
                     </div>
-                    <span className="rounded-[4px] border border-white/8 bg-white/[0.03] px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-slate-400">
-                      Live sync
-                    </span>
-                  </div>
-
-                  <div className="mt-5 space-y-4">
-                    {activities.map((activity) => (
-                      <div
-                        key={activity.title}
-                        className="flex items-start gap-4 border-b border-white/5 pb-4 last:border-b-0 last:pb-0"
-                      >
-                        <span
-                          className={cn(
-                            "mt-1 h-2.5 w-2.5 rounded-full",
-                            activity.accent === "cyan"
-                              ? "bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.7)]"
-                              : activity.accent === "violet"
-                                ? "bg-violet-300 shadow-[0_0_10px_rgba(196,181,253,0.7)]"
-                                : "bg-white shadow-[0_0_10px_rgba(255,255,255,0.5)]",
-                          )}
-                        />
-                        <div className="flex-1">
-                          <p className="text-base text-slate-200">
-                            {activity.title}
-                          </p>
-                          <p className="mt-1 text-sm uppercase tracking-[0.18em] text-slate-500">
-                            {activity.time}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Panel>
-
-                <Panel className="p-6">
-                  <p
-                    className={cn(
-                      orbitron.className,
-                      "text-[10px] uppercase tracking-[0.26em] text-violet-300/80",
-                    )}
-                  >
-                    Security Profile
-                  </p>
-                  <h3
-                    className={cn(
-                      orbitron.className,
-                      "mt-2 text-xl tracking-[0.05em] text-white",
-                    )}
-                  >
-                    Active settings
-                  </h3>
-
-                  <div className="mt-5 space-y-4">
-                    {settings.map((item) => (
-                      <div
-                        key={item.label}
-                        className="flex items-center justify-between border-b border-white/5 pb-4 last:border-b-0 last:pb-0"
-                      >
-                        <div>
-                          <p className="text-base text-slate-200">{item.label}</p>
-                          <p className="mt-1 text-sm uppercase tracking-[0.18em] text-slate-500">
-                            System policy
-                          </p>
-                        </div>
-                        <span className="rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-violet-200">
-                          {item.value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </Panel>
-              </section>
+                  ))}
+                </div>
+              </div>
             </div>
-          </section>
+          </Panel>
+
+          {/* PANEL 2: Session Info */}
+          <Panel className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div>
+                <h2 className={cn(orbitron.className, "text-base font-semibold tracking-[0.05em] text-white")}>
+                  Sesi Aktif
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Informasi login & logout session Anda.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded border border-white/5 bg-white/[0.01] p-4">
+                <p className={cn(orbitron.className, "text-[9px] uppercase tracking-[0.2em] text-slate-500")}>
+                  Last Login
+                </p>
+                <p className="mt-2 text-sm text-slate-200">
+                  {user.last_login_at ? new Date(user.last_login_at).toLocaleString("id-ID") : "—"}
+                </p>
+              </div>
+              <div className="rounded border border-white/5 bg-white/[0.01] p-4">
+                <p className={cn(orbitron.className, "text-[9px] uppercase tracking-[0.2em] text-slate-500")}>
+                  Last Logout
+                </p>
+                <p className="mt-2 text-sm text-slate-200">
+                  {user.last_logout_at ? new Date(user.last_logout_at).toLocaleString("id-ID") : "—"}
+                </p>
+              </div>
+              <div className="rounded border border-white/5 bg-white/[0.01] p-4">
+                <p className={cn(orbitron.className, "text-[9px] uppercase tracking-[0.2em] text-slate-500")}>
+                  Akun Dibuat
+                </p>
+                <p className="mt-2 text-sm text-slate-200">
+                  {user.created_at
+                    ? new Date(user.created_at).toLocaleDateString("id-ID", {
+                        day: "2-digit", month: "short", year: "numeric",
+                      })
+                    : "—"}
+                </p>
+              </div>
+            </div>
+          </Panel>
+
+          {/* FOOTER NOTE */}
+          <footer className="mt-2 border-t border-white/6 pt-4 text-center text-[10px] text-slate-500">
+            <p className={cn(orbitron.className, "uppercase tracking-[0.25em]")}>
+              <br />
+              <span className="text-cyan-300/60">Hubungi Administrator jika Anda perlu melakukan reset password.</span>
+            </p>
+          </footer>
         </div>
       </main>
     </>

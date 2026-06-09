@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link"; // Diperlukan untuk navigasi antar halaman
 
-export default function LoginPage() {
+// Menggunakan nama fungsi "Page" sesuai standar Next.js App Router untuk menghindari error Turbopack
+export default function Page() {
   const router = useRouter();
   const [id, setId] = useState("");
   const [key, setKey] = useState("");
@@ -38,7 +40,7 @@ export default function LoginPage() {
 
       if (!response.ok) {
         setConnecting(false);
-          setError(data.message || "User ID atau access key tidak valid.");
+        setError(data.message || "User ID atau access key tidak valid.");
         return;
       }
 
@@ -72,7 +74,13 @@ export default function LoginPage() {
         .logo-name{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;color:#a855f7;letter-spacing:0.1em;line-height:1}
         .logo-sub{font-family:'Share Tech Mono',monospace;font-size:7px;color:#9ca3af;letter-spacing:0.22em;margin-top:3px}
         .logo-coords{font-family:'Share Tech Mono',monospace;font-size:7.5px;color:#6b7280;letter-spacing:0.08em;margin-top:6px;line-height:1.7}
-        .status-pills{display:flex;gap:20px;align-items:center;padding-top:6px}
+        
+        /* Tambahan CSS untuk membungkus Back Button dan Status Pills */
+        .top-right{display:flex;align-items:center;gap:20px;padding-top:6px}
+        .back-btn{display:flex;align-items:center;gap:6px;font-family:'Share Tech Mono',monospace;font-size:9px;color:#d1d5db;text-decoration:none;letter-spacing:0.16em;padding:6px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:4px;background:rgba(255,255,255,0.03);transition:all 0.2s}
+        .back-btn:hover{color:#fff;background:rgba(168,85,247,0.15);border-color:rgba(168,85,247,0.5)}
+        
+        .status-pills{display:flex;gap:20px;align-items:center}
         .pill{display:flex;align-items:center;gap:6px;font-family:'Share Tech Mono',monospace;font-size:9px;color:#9ca3af;letter-spacing:0.16em}
         .pill-dot{width:7px;height:7px;border-radius:50%;animation:pdot 2s ease-in-out infinite}
         .pill-dot.green{background:#22c55e;box-shadow:0 0 7px #22c55e}
@@ -168,9 +176,20 @@ export default function LoginPage() {
               <div className="logo-coords">LAT: 51.5074&deg; N<br/>LONG: 0.1278&deg; W<br/>BEARING: 264.0&deg;</div>
             </div>
           </div>
-          <div className="status-pills">
-            <div className="pill"><div className="pill-dot green"/>SIGNAL: STABLE</div>
-            <div className="pill"><div className="pill-dot amber"/>ENCRYPTED TUNNEL</div>
+          
+          <div className="top-right">
+            {/* Tombol kembali ke Web yang terhubung secara fungsional menggunakan Link */}
+            <Link href="/" className="back-btn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
+              RETURN TO WEB
+            </Link>
+            
+            <div className="status-pills">
+              <div className="pill"><div className="pill-dot green"/>SIGNAL: STABLE</div>
+              <div className="pill"><div className="pill-dot amber"/>ENCRYPTED TUNNEL</div>
+            </div>
           </div>
         </div>
 

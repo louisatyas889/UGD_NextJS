@@ -78,6 +78,7 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ size, price, desc, details, o
   </div>
 );
 
+// --- KOMPONEN UTAMA (DEFAULT EXPORT) ---
 export default function Page() {
   const [packageId, setPackageId] = useState<string>("");
   const [activePkg, setActivePkg] = useState<TrackingPackage | null>(null);
@@ -89,30 +90,43 @@ export default function Page() {
   const [checkoutStatus, setCheckoutStatus] = useState<string>("");
   
   const [formData, setFormData] = useState({
-    pengirim: "", penerima: "", telepon: "", asal: "", tujuan: "", barang: "", berat: "", pembayaran: "QRIS", tanggal: ""
+    pengirim: "", penerima: "", telepon: "", asal: "", tujuan: "", barang: "", jenis_barang: "", berat: "", pembayaran: "QRIS", tanggal: ""
   });
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<any>(null);
   const currentMarker = useRef<any>(null);
 
+  // --- EFFECT UNTUK INITIALISASI LEAFLET SECARA AMAN ---
   useEffect(() => {
-    if (typeof window === "undefined" || leafletMap.current) return;
+    if (typeof window === "undefined") return;
 
-    const fontLink = document.createElement("link");
-    fontLink.rel = "stylesheet";
-    fontLink.href = "https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap";
-    document.head.appendChild(fontLink);
+    // Inject Google Font Share Tech Mono jika belum ada
+    if (!document.getElementById("share-tech-mono-font")) {
+      const fontLink = document.createElement("link");
+      fontLink.id = "share-tech-mono-font";
+      fontLink.rel = "stylesheet";
+      fontLink.href = "https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap";
+      document.head.appendChild(fontLink);
+    }
 
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-    document.head.appendChild(link);
+    // Inject Leaflet CSS jika belum ada
+    if (!document.getElementById("leaflet-css")) {
+      const link = document.createElement("link");
+      link.id = "leaflet-css";
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
 
-    const script = document.createElement("script");
-    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-    script.onload = () => {
-      if (!mapContainerRef.current || (window as any).L === undefined) return;
+    let mapInstance: any = null;
+
+    const initMap = () => {
+      if (!mapContainerRef.current || (window as any).L === undefined || leafletMap.current) return;
+      
+      // Mencegah error 'Map container is already initialized' pada React StrictMode
+      if ((mapContainerRef.current as any)._leaflet_id) return;
+
       const L = (window as any).L;
 
       const map = L.map(mapContainerRef.current, {
@@ -127,9 +141,37 @@ export default function Page() {
       }).addTo(map);
       
       leafletMap.current = map;
+      mapInstance = map;
       setTimeout(() => { map.invalidateSize(); }, 300);
     };
-    document.head.appendChild(script);
+
+    // Pengecekan script Leaflet JS
+    if ((window as any).L) {
+      initMap();
+    } else if (!document.getElementById("leaflet-script")) {
+      const script = document.createElement("script");
+      script.id = "leaflet-script";
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.onload = initMap;
+      document.head.appendChild(script);
+    } else {
+      // Jika script sedang loading oleh komponen lain, tunggu sebentar lalu coba init
+      const interval = setInterval(() => {
+        if ((window as any).L) {
+          initMap();
+          clearInterval(interval);
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    }
+
+    // Cleanup saat komponen unmount untuk menghindari kebocoran memori / objek peta ganda
+    return () => {
+      if (mapInstance) {
+        mapInstance.remove();
+        leafletMap.current = null;
+      }
+    };
   }, []);
 
   const handleTrack = async () => {
@@ -220,6 +262,7 @@ export default function Page() {
           negara_tujuan: formData.tujuan,
           package_size: selectedService,
           nama_barang: formData.barang,
+          jenis_barang: formData.jenis_barang,
           berat: parseFloat(formData.berat) || 0,
           no_telepon: formData.telepon,
           tanggal: formData.tanggal
@@ -238,7 +281,7 @@ export default function Page() {
       setTimeout(() => {
         setIsModalOpen(false);
         setCheckoutStatus("");
-        setFormData({ pengirim: "", penerima: "", telepon: "", asal: "", tujuan: "", barang: "", berat: "", pembayaran: "QRIS", tanggal: "" });
+        setFormData({ pengirim: "", penerima: "", telepon: "", asal: "", tujuan: "", barang: "", jenis_barang: "", berat: "", pembayaran: "QRIS", tanggal: "" });
       }, 6000);
 
     } catch (err) {
@@ -292,27 +335,89 @@ export default function Page() {
 
       {/* ABOUT US SECTION */}
       <section id="about" className="max-w-7xl mx-auto px-8 py-32 border-t border-white/5 relative">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+        <div className="flex flex-col gap-24">
+          
+          {/* VISI & MISI */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
+            <div>
+              <span className="bg-purple-500/10 text-purple-300 text-xs font-black px-4 py-2 rounded-full uppercase tracking-widest border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+                Corporate Profile
+              </span>
+              <h2 className="text-4xl md:text-5xl font-bold mt-6 uppercase italic tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-100 to-gray-400 mb-6">
+                Visi Kami
+              </h2>
+              <p className="text-gray-300 text-lg leading-relaxed font-medium">
+                Menjadi perusahaan pelayaran internasional terdepan yang menghubungkan dunia melalui layanan transportasi laut yang aman, terpercaya, inovatif, dan berkelanjutan, serta memberikan nilai terbaik bagi pelanggan, mitra bisnis, dan masyarakat global.
+              </p>
+            </div>
+            
+            <div className="border border-white/10 bg-gradient-to-b from-white/[0.03] to-transparent p-8 rounded-2xl relative overflow-hidden backdrop-blur-sm group hover:border-cyan-500/30 transition-all duration-500">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/5 blur-2xl rounded-full group-hover:bg-cyan-500/10 transition-all"></div>
+              <h3 style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 mb-6 uppercase tracking-wider">
+                Misi Perusahaan
+              </h3>
+              <ul className="space-y-4 text-sm text-gray-400 leading-relaxed font-medium">
+                <li className="flex gap-3"><span className="text-cyan-400">▹</span> Menyediakan layanan transportasi dan logistik laut internasional yang tepat waktu, aman, dan efisien untuk mendukung perdagangan global.</li>
+                <li className="flex gap-3"><span className="text-cyan-400">▹</span> Mengutamakan keselamatan awak kapal, pelanggan, muatan, dan lingkungan dalam setiap kegiatan operasional perusahaan.</li>
+                <li className="flex gap-3"><span className="text-cyan-400">▹</span> Mengembangkan armada modern dan teknologi maritim yang inovatif guna meningkatkan kualitas layanan dan daya saing.</li>
+                <li className="flex gap-3"><span className="text-cyan-400">▹</span> Membangun jaringan pelayaran internasional yang luas untuk menghubungkan berbagai negara, pelabuhan, dan pusat perdagangan.</li>
+                <li className="flex gap-3"><span className="text-cyan-400">▹</span> Menjalin kemitraan strategis dengan pelanggan, pelaku industri, dan otoritas pelabuhan.</li>
+                <li className="flex gap-3"><span className="text-cyan-400">▹</span> Mengembangkan SDM yang profesional, kompeten, dan berintegritas tinggi.</li>
+                <li className="flex gap-3"><span className="text-cyan-400">▹</span> Mendukung praktik bisnis yang ramah lingkungan melalui pengurangan emisi dan efisiensi energi.</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* NILAI-NILAI PERUSAHAAN */}
           <div>
-            <span className="bg-purple-500/10 text-purple-300 text-xs font-black px-4 py-2 rounded-full uppercase tracking-widest border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.1)]">
-              Corporate Profile
-            </span>
-            <h2 className="text-5xl md:text-6xl font-bold mt-6 uppercase italic tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-100 to-gray-400">
-              Global Maritime Logistics
-            </h2>
-            <p className="text-gray-300 mt-6 text-lg leading-relaxed font-medium">
-              Serena Sail merupakan integrator logistik maritim terdepan yang menghubungkan rute domestik dan internasional menggunakan keandalan armada kargo modern berteknologi pelacakan satelit real-time terintegrasi.
-            </p>
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-bold uppercase italic text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">Nilai-Nilai Perusahaan SERENA SAIL</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                { title: "Safety First", desc: "Keselamatan merupakan prioritas utama dalam setiap pelayaran dan aktivitas operasional." },
+                { title: "Excellence", desc: "Memberikan pelayanan terbaik dengan standar internasional." },
+                { title: "Reliability", desc: "Menjadi mitra logistik yang dapat dipercaya dalam setiap perjalanan dan pengiriman." },
+                { title: "Environmental Responsibility", desc: "Menjaga kelestarian laut dan lingkungan untuk generasi mendatang." },
+                { title: "Networking & Growth", desc: "Membangun konektivitas global dan menciptakan peluang pertumbuhan bersama." },
+                { title: "Adaptability", desc: "Terus berinovasi dan beradaptasi terhadap perkembangan teknologi dan kebutuhan pasar." }
+              ].map((val, idx) => (
+                <div key={idx} className="bg-white/[0.02] border border-white/5 p-6 rounded-2xl hover:border-purple-500/40 hover:bg-purple-500/5 hover:-translate-y-1 transition-all duration-300 group">
+                  <h4 style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-lg font-bold text-purple-400 mb-3 group-hover:text-cyan-400 transition-colors">{val.title}</h4>
+                  <p className="text-sm text-gray-500 leading-relaxed group-hover:text-gray-300 transition-colors">{val.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="border border-white/10 bg-gradient-to-b from-white/[0.03] to-transparent p-8 rounded-2xl relative overflow-hidden group backdrop-blur-sm">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 blur-xl rounded-full"></div>
-            <h3 style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 mb-4 uppercase tracking-wider">
-              Visi dan Operasional
-            </h3>
-            <p className="text-sm text-gray-400 leading-relaxed font-medium">
-              Menghadirkan transparansi end-to-end data barang bawaan dari pelabuhan asal hingga tujuan akhir demi efisiensi rantai pasok industri UMKM global.
+
+          {/* TENTANG JARINGAN LAYANAN */}
+          <div className="bg-gradient-to-br from-[#020617] via-purple-900/10 to-cyan-900/10 border border-white/10 rounded-3xl p-10 lg:p-16 relative overflow-hidden text-center shadow-[0_0_40px_rgba(34,211,238,0.05)]">
+            <div className="absolute inset-0 bg-[url('/kapal.png')] opacity-[0.03] bg-center bg-no-repeat bg-contain"></div>
+            
+            <h2 className="text-3xl font-bold mb-6 text-white relative z-10 uppercase italic tracking-tight">Tentang Jaringan Layanan SERENA SAIL</h2>
+            <p className="text-gray-300 max-w-4xl mx-auto text-base leading-relaxed mb-8 relative z-10 font-medium">
+              Sebagai perusahaan pelayaran internasional yang terus berkembang, SERENA SAIL saat ini melayani pengiriman barang dan logistik ke tujuh negara tujuan utama yang menjadi pusat perdagangan dan distribusi di kawasan Asia-Pasifik hingga Amerika Utara. Jaringan pelayaran kami dirancang untuk memberikan layanan yang aman, efisien, dan tepat waktu bagi pelanggan yang ingin menjangkau pasar internasional.
             </p>
+            
+            <div className="flex flex-wrap justify-center gap-3 mb-10 relative z-10">
+              {["Singapura", "Jepang", "Filipina", "China", "Korea Selatan", "Amerika Serikat", "Australia"].map((country) => (
+                <span key={country} className="px-5 py-2.5 border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 rounded-full text-xs font-bold tracking-widest uppercase shadow-[0_0_15px_rgba(34,211,238,0.15)] hover:bg-cyan-400 hover:text-[#020617] transition-all cursor-default">
+                  {country}
+                </span>
+              ))}
+            </div>
+            
+            <p className="text-gray-400 max-w-4xl mx-auto text-sm leading-relaxed mb-12 relative z-10">
+              Meskipun masih tergolong sebagai perusahaan yang sedang memperluas jangkauan operasionalnya, SERENA SAIL berkomitmen untuk menghadirkan layanan pengiriman internasional yang dapat diandalkan melalui konektivitas pelabuhan strategis di ketujuh negara tersebut. Ke depan, kami akan terus mengembangkan jaringan pelayaran guna mendukung kebutuhan perdagangan global serta memperkuat peran Indonesia dalam rantai pasok internasional.
+            </p>
+            
+            <div className="inline-block relative z-10 bg-white/5 backdrop-blur-sm border border-white/10 px-8 py-5 rounded-2xl">
+              <h3 className="text-xl md:text-3xl font-black italic tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.4)]">
+                "From Indonesia to the World's Key Trade Routes"
+              </h3>
+            </div>
           </div>
+
         </div>
       </section>
 
@@ -459,6 +564,19 @@ export default function Page() {
                 </div>
 
                 <div className="mb-3">
+                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">KATEGORI JENIS BARANG *</label>
+                  <select required name="jenis_barang" value={formData.jenis_barang} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-[#0c0c12] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-cyan-500/50 transition-colors cursor-pointer appearance-none">
+                    <option value="" disabled>Pilih Kategori Barang...</option>
+                    <option value="Makanan">Makanan</option>
+                    <option value="MakeUp">MakeUp</option>
+                    <option value="Aksesories">Aksesories</option>
+                    <option value="Pakaian">Pakaian</option>
+                    <option value="Furnitur">Furnitur</option>
+                    <option value="Barang Berat">Barang Berat</option>
+                  </select>
+                </div>
+
+                <div className="mb-3">
                   <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NEGARA ASAL PENGIRIMAN *</label>
                   <input required name="asal" value={formData.asal} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Contoh: Indonesia, Jepang" />
                 </div>
@@ -475,8 +593,7 @@ export default function Page() {
 
                 <div className="mb-3">
                   <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">TANGGAL PENGIRIMAN *</label>
-                  <input required name="tanggal" value={formData.tanggal} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors [color-scheme:dark]" type="date" 
-/>
+                  <input required name="tanggal" value={formData.tanggal} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors [color-scheme:dark]" type="date" />
                 </div>
 
                 <div className="mb-3 md:col-span-2">

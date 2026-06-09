@@ -22,10 +22,11 @@ interface FleetPageClientProps {
 }
 
 // Otomatisasi petaan Status ke Warna Neon & Icon Lambang database
+// CATATAN: IN PORT sekarang UNGU (#a855f7) sesuai permintaan terbaru.
 const STATUS_MAP: Record<string, { color: string; icon: string }> = {
   "EN ROUTE": { color: "#22d3ee", icon: "anchor" },      // Kapal Berjalan (Cyan)
   "DELAYED": { color: "#f87171", icon: "warn" },         // Kapal Delay / Badai (Merah)
-  "IN PORT": { color: "#6b7280", icon: "anchor" },       // Sudah Berlabuh (Abu-abu)
+  "IN PORT": { color: "#a855f7", icon: "anchor" },       // Sudah Berlabuh (Ungu)
   "MAINTENANCE": { color: "#a855f7", icon: "wrench" },   // Perawatan (Ungu)
   "HOME PORT": { color: "#ffffff", icon: "home" },       // Kembali ke Dermaga (Putih Neon)
 };

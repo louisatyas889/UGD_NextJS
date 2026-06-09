@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import PrimeTopbar from "../ui/PrimeTopbar";
 import { useFleet } from "../context/FleetContext";
 
+
 function MonIcon({ t, color }: { t: string; color?: string }) {
   if (t === "chart") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color || "#22d3ee"} strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
   if (t === "anchor") return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color || "#a855f7"} strokeWidth="2"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="22"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>;
@@ -147,6 +148,21 @@ export default function DashboardClient({ initialCards, initialLogs = [], initia
     );
   }, [initialVessels]);
 
+  // UI Swap / Pagination untuk Tactical Fleet Overview (4 kapal per halaman)
+  const FLEET_PAGE_SIZE = 4;
+  const [fleetPage, setFleetPage] = useState(1);
+  useEffect(() => {
+    // Reset halaman ke 1 jika filter/search berubah dan halaman sekarang kosong
+    const totalPages = Math.max(1, Math.ceil((filteredVessels?.length || 0) / FLEET_PAGE_SIZE));
+    if (fleetPage > totalPages) setFleetPage(1);
+  }, [filteredVessels, fleetPage]);
+
+  const fleetTotalPages = Math.max(1, Math.ceil((filteredVessels?.length || 0) / FLEET_PAGE_SIZE));
+  const fleetStart = (fleetPage - 1) * FLEET_PAGE_SIZE;
+  const paginatedVessels = useMemo(() => {
+    return (filteredVessels || []).slice(fleetStart, fleetStart + FLEET_PAGE_SIZE);
+  }, [filteredVessels, fleetStart]);
+
   // Reactive Energy Metrics Mapping
   const dynamicEnergyData = useMemo(() => {
     return (initialFuel || []).map((f: any) => {
@@ -258,11 +274,20 @@ export default function DashboardClient({ initialCards, initialLogs = [], initia
         .tv{font-family:'Share Tech Mono',monospace;font-size:10px;color:#e5e7eb}
 
         .fuel-panel{flex-shrink:0; display:flex; flex-direction:column; min-height:220px}
-        .fca{flex:1; padding:20px 14px; display:flex; flex-direction:column; justify-content:flex-end}
-        .brow{display:flex; align-items:flex-end; gap:8px; height:100px; width:100%}
-        .bc{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%}
-        .bf{width:100%; min-width:12px; border-radius:2px 2px 0 0; transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1)}
-        .bl{margin-top:8px; font-family:'Share Tech Mono',monospace; font-size:7px; color:#4b5563; text-align:center}
+        .fca{flex:1; padding:0 14px 14px; display:flex; flex-direction:column; justify-content:flex-end}
+        .brow{display:flex; align-items:flex-end; gap:18px; height:140px; width:100%; padding:18px 0 0; border-bottom:1px solid #111; overflow-x:auto}
+        .bc{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; position:relative}
+        .bf{width:18px; min-width:18px; border-radius:2px 2px 0 0; transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1); position:relative}
+        .bf-val{position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-family:'Share Tech Mono',monospace; font-size:9px; font-weight:bold; text-shadow:0 0 4px rgba(0,0,0,1)}
+        .bl{position:absolute; bottom:-20px; left:50%; transform:translateX(-50%); font-family:'Share Tech Mono',monospace; font-size:8px; color:#6b7280; white-space:nowrap}
+        .swap-btn{background:transparent; border:1px solid rgba(255,255,255,0.15); color:#9ca3af; padding:5px 10px; border-radius:3px; font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:0.1em; transition:all 0.2s}
+        .swap-btn:hover:not(:disabled){background:rgba(168,85,247,0.15); border-color:#a855f7; color:#fff}
+        .swap-btn-num{width:24px; height:24px; border:1px solid; border-radius:3px; font-family:'Orbitron',sans-serif; font-size:10px; font-weight:600; transition:all 0.2s; cursor:pointer}
+        .swap-btn-num:hover{background:rgba(168,85,247,0.2)!important; color:#fff!important}
+        .core-title{font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600; color:#e5e7eb; padding:14px 16px 4px}
+        .core-sub{font-family:'Share Tech Mono',monospace; font-size:8px; color:#a855f7; letter-spacing:0.2em; padding:0 16px 12px}
+        .core-wrap{padding:0 16px 18px}
+
 
         .right-col{display:flex;flex-direction:column;gap:10px}
         .ah{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.06)}
@@ -281,10 +306,17 @@ export default function DashboardClient({ initialCards, initialLogs = [], initia
           <div className="panel">
             <div className="ph">
               <div className="pt"><div className="ptb"/>TACTICAL FLEET OVERVIEW</div>
-              <span className="pts">SYSTEM CLOCK: {utc}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span className="pts">SYSTEM CLOCK: {utc}</span>
+                <span className="pts" style={{ color: filteredVessels.length > 0 ? "#a855f7" : "#4b5563" }}>
+                  {filteredVessels.length > 0
+                    ? `PAGE ${fleetPage} / ${fleetTotalPages}`
+                    : "0 UNITS"}
+                </span>
+              </div>
             </div>
-            {filteredVessels && filteredVessels.length > 0 ? (
-              filteredVessels.map((v: any) => {
+            {paginatedVessels && paginatedVessels.length > 0 ? (
+              paginatedVessels.map((v: any) => {
                 const upperStatus = (v.status || "").toUpperCase();
 
                 // 1. Kondisi Warna Status: HOME PORT dan IN PORT dipaksa Ungu Neon (#a855f7)
@@ -326,6 +358,57 @@ export default function DashboardClient({ initialCards, initialLogs = [], initia
                 {searchQuery ? `NO OPERATIONS MATCHING "${searchQuery.toUpperCase()}"` : "NO VESSEL TELEMETRY DETECTED"}
               </div>
             )}
+
+            {/* UI SWAP / PAGINATION BAR */}
+            {filteredVessels.length > FLEET_PAGE_SIZE && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 18px", borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(168,85,247,0.04)" }}>
+                <span className="pts" style={{ color: "#9ca3af" }}>
+                  SHOWING {fleetStart + 1}–{Math.min(fleetStart + FLEET_PAGE_SIZE, filteredVessels.length)} OF {filteredVessels.length} UNITS
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setFleetPage((p) => Math.max(1, p - 1))}
+                    disabled={fleetPage <= 1}
+                    className="swap-btn"
+                    style={{ opacity: fleetPage <= 1 ? 0.35 : 1, cursor: fleetPage <= 1 ? "not-allowed" : "pointer" }}
+                    aria-label="Previous page"
+                  >
+                    ‹ PREV
+                  </button>
+                  {Array.from({ length: fleetTotalPages }).map((_, i) => {
+                    const p = i + 1;
+                    const active = p === fleetPage;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setFleetPage(p)}
+                        className="swap-btn-num"
+                        style={{
+                          background: active ? "#a855f7" : "transparent",
+                          color: active ? "#fff" : "#9ca3af",
+                          borderColor: active ? "#a855f7" : "rgba(255,255,255,0.15)",
+                        }}
+                        aria-label={`Go to page ${p}`}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setFleetPage((p) => Math.min(fleetTotalPages, p + 1))}
+                    disabled={fleetPage >= fleetTotalPages}
+                    className="swap-btn"
+                    style={{ opacity: fleetPage >= fleetTotalPages ? 0.35 : 1, cursor: fleetPage >= fleetTotalPages ? "not-allowed" : "pointer" }}
+                    aria-label="Next page"
+                  >
+                    NEXT ›
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* MAP PANEL */}
@@ -356,21 +439,29 @@ export default function DashboardClient({ initialCards, initialLogs = [], initia
         {/* RIGHT SIDEBAR */}
         <div className="right-col">
           
-          {/* 1. ANALYTICS ENERGY CORE (DI ATAS) */}
-          <div className="panel fuel-panel">
-            <div className="ah"><div className="at" style={{ color: "#a855f7" }}>ANALYTICS ENERGY CORE</div></div>
-            <div className="fca">
+          {/* 1. ANALYTICS ENERGY CORE (DI ATAS) - Style disinkronkan dengan page Analytics */}
+          <div className="panel fuel-panel" style={{ background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.03)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px 4px", borderBottom: "none" }}>
+              <div className="core-title" style={{ padding: 0 }}>Tingkat Energi Core Armada</div>
+              <div className="core-sub" style={{ padding: 0, color: "#22d3ee" }}>◉ LIVE FEED</div>
+            </div>
+            <div className="core-wrap">
               <div className="brow">
                 {dynamicEnergyData.length > 0 ? (
                   dynamicEnergyData.map((b: any, i: number) => (
                     <div className="bc" key={i}>
-                      <div className="bf" style={{ height: `${Math.max(b.height, 12)}%`, background: b.color, boxShadow: `0 0 10px ${b.color}55` }} />
+                      <div
+                        className="bf"
+                        style={{ height: `${Math.max(b.height, 12)}%`, background: b.color, boxShadow: `0 0 10px ${b.color}55` }}
+                      >
+                        <span className="bf-val" style={{ color: b.color }}>{b.height}%</span>
+                      </div>
                       <div className="bl">{b.label}</div>
                     </div>
                   ))
                 ) : (
-                  <div style={{ width: "100%", textTransform: "uppercase", fontSize: 9, color: "#4b5563", fontFamily: "Share Tech Mono", textAlign: "center", marginBottom: 40 }}>
-                    No Analytics Linked
+                  <div style={{ width: "100%", textTransform: "uppercase", fontSize: 9, color: "#4b5563", fontFamily: "Share Tech Mono", textAlign: "center", paddingBottom: 20 }}>
+                    NO SHIPS MATCHING SEARCH FILTER
                   </div>
                 )}
               </div>

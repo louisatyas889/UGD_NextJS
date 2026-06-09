@@ -3,6 +3,8 @@ import './ui/global.css';
 import { Metadata } from 'next';
 // 1. Pastikan path import ini benar sesuai dengan lokasi file FleetContext.tsx kamu
 import { FleetProvider } from './context/FleetContext'; 
+// 2. Provider untuk sinkronisasi kapal MAINTENANCE ke seluruh topbar
+import { MaintenanceProvider } from './context/MaintenanceContext';
 
 // Font untuk teks body (Inter)
 const inter = Inter({ 
@@ -27,9 +29,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`scroll-smooth ${inter.variable} ${spaceGrotesk.variable}`}>
       <body className="antialiased bg-[#020617] text-white font-sans selection:bg-cyan-500/30">
-        {/* 2. Bungkus children dengan FleetProvider agar state simulator bertahan global */}
+        {/* 3. Bungkus dengan kedua provider. FleetProvider di luar MaintenanceProvider 
+            agar tidak ada konflik dependency. */}
         <FleetProvider>
-          {children}
+          <MaintenanceProvider>
+            {children}
+          </MaintenanceProvider>
         </FleetProvider>
       </body>
     </html>

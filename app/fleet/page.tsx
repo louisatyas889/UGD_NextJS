@@ -17,15 +17,17 @@ export default async function FleetPage() {
   const initialVessels = (vesselsFromDb || []).map((v: any) => {
     const lowerStatus = v.status?.toLowerCase() || "";
     
-    // Tentukan kode warna HEX asli untuk kebutuhan render Grafik Bar di Client Panel
-    let hexColor = "#f472b6"; // Default maintenance (Pink)
+    // Tentukan kode warna HEX asli untuk kebutuhan render Grafik Bar di Client Panel.
+    // CATATAN: IN PORT sekarang UNGU (#a855f7) sesuai permintaan terbaru.
+    let hexColor = "#a855f7"; // Default = Ungu (untuk IN PORT / MAINTENANCE)
     if (lowerStatus.includes("en route") || lowerStatus.includes("en_route")) {
       hexColor = "#22d3ee"; // Cyan
     } else if (lowerStatus.includes("delay")) {
       hexColor = "#f87171"; // Merah
-    } else if (lowerStatus.includes("port") || lowerStatus.includes("docked") || lowerStatus.includes("in port")) {
-      hexColor = "#9ca3af"; // Abu-abu
+    } else if (lowerStatus.includes("home port")) {
+      hexColor = "#ffffff"; // Putih Neon untuk HOME PORT
     }
+    // IN PORT / DOCKED / MAINTENANCE semua masuk ke default Ungu di sini.
 
     return {
       id: v.id,

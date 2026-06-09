@@ -94,12 +94,20 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
   const strokeDashOffset = totalUnits > 0 ? (enRoutePercentage / 100) * 251 : 0;
   const strokeDasharray = `${strokeDashOffset} 251`;
 
-  // Map data energi dari global state ke chart visual
-  const fuelData = filteredVessels.map(v => ({
-    c: v.status_color || "#22d3ee",
-    h: vesselEnergy[v.id] !== undefined ? vesselEnergy[v.id] : (v.progress_pct !== undefined ? v.progress_pct : 100), 
-    l: v.id
-  }));
+  // Map data energi dari global state ke chart visual.
+  // Kapal berstatus IN PORT / PORT / DOCKED dipaksa UNGU (#a855f7) sesuai permintaan.
+  const isInPort = (s: string) => {
+    const lower = s?.toLowerCase() || "";
+    return lower.includes("port") || lower.includes("docked") || lower.includes("load");
+  };
+  const fuelData = filteredVessels.map(v => {
+    const overrideColor = isInPort(v.status) ? "#a855f7" : null;
+    return {
+      c: overrideColor || v.status_color || "#22d3ee",
+      h: vesselEnergy[v.id] !== undefined ? vesselEnergy[v.id] : (v.progress_pct !== undefined ? v.progress_pct : 100), 
+      l: v.id
+    };
+  });
 
   const topVessels = filteredVessels.slice(0, 3).map((v) => {
     const s = v.status?.toLowerCase() || "";
@@ -169,19 +177,13 @@ export default function AnalyticsPageClient({ dbVessels }: AnalyticsPageClientPr
         <div className="grid-layout">
           {/* Sisi Kiri */}
           <div className="left-col">
-            {/* KPI Row */}
-            <div className="kpi-row">
+            {/* KPI Row — hanya CARGO ARRIVAL RATE (AVG ETA ACCURACY dihapus sesuai permintaan) */}
+            <div className="kpi-row" style={{ gridTemplateColumns: "1fr" }}>
               <div className="kpi-card" style={{ borderLeft: "3px solid #a855f7" }}>
                 <div className="kpi-label">CARGO ARRIVAL RATE</div>
                 <div className="kpi-val">{dynamicArrivalRate} <span style={{ fontSize: 16, color: "#4b5563" }}>%</span></div>
                 <div className="kpi-sub" style={{ color: "#22d3ee" }}>◉ GLOBAL LOGISTICS RATE</div>
                 <div className="kpi-icon-box"><svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
-              </div>
-              <div className="kpi-card" style={{ borderLeft: "3px solid #22d3ee" }}>
-                <div className="kpi-label">AVG ETA ACCURACY</div>
-                <div className="kpi-val">92 <span style={{ fontSize: 16, color: "#4b5563" }}>%</span></div>
-                <div className="kpi-sub" style={{ color: "#f87171" }}>↑ +2.4% MOM</div>
-                <div className="kpi-icon-box"><svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
               </div>
             </div>
 

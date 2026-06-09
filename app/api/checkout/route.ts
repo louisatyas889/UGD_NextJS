@@ -11,16 +11,29 @@ export async function POST(request: Request) {
       nama_penerima,
       negara_asal,
       negara_tujuan,
-      package_size,
+      package_size, // Nilai 'Small', 'Medium', atau 'Large'
       nama_barang,
+      jenis_barang,
       berat,
       no_telepon,
       tanggal,
+      pembayaran, 
     } = body;
+
+    // 1. HITUNG HARGA BERDASARKAN PACKAGE SIZE
+    let hargaLayanan = 0;
+    if (package_size === 'Small') {
+      hargaLayanan = 250000;
+    } else if (package_size === 'Medium') {
+      hargaLayanan = 1200000;
+    } else if (package_size === 'Large') {
+      hargaLayanan = 5500000;
+    }
 
     const sql = getSql();
 
-    await sql`
+    // 2. INSERT KE TABEL BARANG DAN AMBIL ID BARANG YANG BARU
+    const insertBarangResult = await sql`
       INSERT INTO barang (
         no_resi,
         tanggal_kirim,
@@ -52,11 +65,11 @@ export async function POST(request: Request) {
         ${negara_asal},
         ${negara_tujuan},
         ${nama_barang},
-        ${nama_barang},
+        ${jenis_barang},
         ${berat},
         'Laut',
         '',
-        '',
+        'Serena Cargo Vessel', -- Disamakan dengan nama kapal di tracking paket biar sinkron
         '',
         0,
         'Siap Jalan',
@@ -65,8 +78,27 @@ export async function POST(request: Request) {
         'Siap Kirim',
         ''
       )
+      RETURNING id
     `;
 
+    // Ambil ID barang hasil insert tadi
+    const barangId = insertBarangResult[0].id;
+
+    // 3. INSERT KE TABEL TRANSAKSI MENGGUNAKAN BARANG_ID
+    await sql`
+      INSERT INTO transaksi (
+        barang_id,
+        harga,
+        status_transaksi
+      )
+      VALUES (
+        ${barangId},
+        ${hargaLayanan},
+        'Lunas'
+      )
+    `;
+
+    // 4. INSERT KE TABEL TRACKING_PACKAGES (SINKRON DENGAN TIMESTAMPS)
     await sql`
       INSERT INTO tracking_packages (
         id,
@@ -74,15 +106,19 @@ export async function POST(request: Request) {
         destination,
         lat,
         lng,
-        vessel_name
+        vessel_name,
+        created_at,
+        updated_at
       )
       VALUES (
         ${no_resi},
-        ${package_size},
+        ${package_size}, -- Sekarang datanya murni 'Small'/'Medium'/'Large' sesuai frontend
         ${negara_tujuan},
         14.5995,
         120.9842,
-        'Serena Cargo Vessel'
+        'Serena Cargo Vessel',
+        NOW(), -- Mengisi waktu pembuatan otomatis di Neon
+        NOW()  -- Mengisi waktu update otomatis di Neon
       )
     `;
 

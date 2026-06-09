@@ -14,6 +14,28 @@ type PersonnelFormValues = { id: string; name: string; workShift: string; jobTit
 
 const emptyForm: PersonnelFormValues = { id: "", name: "", workShift: "MORNING", jobTitle: "", startHour: "6", endHour: "14", assignedVessel: "" };
 
+// Opsi daftar jenis pekerjaan yang diambil dari data Neon (fleet_personnel)
+const JOB_TITLES = [
+  "Commanding Officer",
+  "Chief Engineer",
+  "Navigation Specialist",
+  "Cargo Operations Lead",
+  "Route Analyst",
+  "Security Supervisor",
+  "Maintenance Chief",
+  "Medical Officer",
+  "Communications Officer"
+];
+
+// Opsi daftar kapal yang terdaftar di database Neon (fleet_vessels)
+const VESSELS = [
+  { id: "PL-0909-MERKURIUS", name: "PL-0909-MERKURIUS" },
+  { id: "PL-123-BULAN", name: "PL-123-BULAN" },
+  { id: "PL-230-NANA", name: "PL-230-NANA" },
+  { id: "PL-234-NARS", name: "PL-234-NARS" },
+  { id: "PL-245-MARS", name: "PL-245-MARS" }
+];
+
 function toFormValues(record: PersonnelRecord): PersonnelFormValues {
   return { id: record.id, name: record.name, workShift: record.workShift, jobTitle: record.jobTitle, startHour: String(record.startHour), endHour: String(record.endHour), assignedVessel: record.assignedVessel };
 }
@@ -58,7 +80,37 @@ export default function UserManagementTable({ currentHour, records }: UserManage
   const [isPending, startTransition] = useTransition();
   const deferredQuery = useDeferredValue(query);
 
-  useEffect(() => { if (state.success) { setFormValues(emptyForm); setEditingId(null); setFeedback(state.message); router.refresh(); } }, [router, state.message, state.success]);
+  // LOGIK: Menghitung nomor resi ID urutan otomatis berikutnya (Format: SS-XXX)
+  const nextId = useMemo(() => {
+    let maxNum = 0;
+    records.forEach((crew) => {
+      if (crew.id && crew.id.startsWith("SS-")) {
+        const num = parseInt(crew.id.replace("SS-", ""), 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    });
+    const nextNum = maxNum + 1;
+    return `SS-${String(nextNum).padStart(3, "0")}`;
+  }, [records]);
+
+  // Efek untuk mengisi ID otomatis secara default jika tidak dalam mode edit
+  useEffect(() => {
+    if (!editingId) {
+      setFormValues((current) => ({ ...current, id: nextId }));
+    }
+  }, [nextId, editingId]);
+
+  useEffect(() => { 
+    if (state.success) { 
+      setFormValues({ ...emptyForm, id: nextId }); 
+      setEditingId(null); 
+      setFeedback(state.message); 
+      router.refresh(); 
+    } 
+  }, [router, state.message, state.success, nextId]);
+  
   useEffect(() => { setCurrentPage(1); }, [deferredQuery]);
 
   const filteredRecords = useMemo(() => {
@@ -73,7 +125,7 @@ export default function UserManagementTable({ currentHour, records }: UserManage
   const paginatedRecords = filteredRecords.slice(startIndex, startIndex + 6);
 
   function handleEdit(record: PersonnelRecord) { setFormValues(toFormValues(record)); setEditingId(record.id); setFeedback(`Mode edit: ${record.name}`); }
-  function handleReset() { setFormValues(emptyForm); setEditingId(null); setFeedback("Form crew di-reset."); }
+  function handleReset() { setFormValues({ ...emptyForm, id: nextId }); setEditingId(null); setFeedback("Form crew di-reset."); }
 
   async function handleDelete(id: string) {
     if (!window.confirm(`Hapus crew ${id} dari database?`)) return;
@@ -88,19 +140,80 @@ export default function UserManagementTable({ currentHour, records }: UserManage
           <button className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300" onClick={handleReset} type="button">Reset</button>
         </div>
         {(feedback || state.message) ? <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${state.success ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : "border-cyan-400/20 bg-cyan-400/10 text-cyan-100"}`}>{feedback || state.message}</div> : null}
+        
         <div className="space-y-4">
-          {[["id", "USER ID"], ["name", "NAME"], ["jobTitle", "JOB TITLE"], ["assignedVessel", "ASSIGNED VESSEL"]].map(([field, label]) => (
-            <label className="block text-sm text-slate-300" key={field}>{label}<input className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" name={field} onChange={(event) => setFormValues((current) => ({ ...current, [field]: event.target.value }))} value={formValues[field as keyof PersonnelFormValues]} /><FieldError message={state.fieldErrors?.[field]?.[0]} /></label>
-          ))}
+          {/* USER ID (Otomatis & Read-only) */}
+          <label className="block text-sm text-slate-300">
+            USER ID
+            <input 
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2.5 text-sm text-slate-400 outline-none font-mono cursor-not-allowed" 
+              name="id" 
+              readOnly 
+              value={formValues.id} 
+            />
+            <FieldError message={state.fieldErrors?.id?.[0]} />
+          </label>
+
+          {/* NAME */}
+          <label className="block text-sm text-slate-300">
+            NAME
+            <input 
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" 
+              name="name" 
+              onChange={(event) => setFormValues((current) => ({ ...current, name: event.target.value }))} 
+              value={formValues.name} 
+            />
+            <FieldError message={state.fieldErrors?.name?.[0]} />
+          </label>
+
+          {/* JOB TITLE (Dropdown Pekerjaan dari Neon) */}
+          <label className="block text-sm text-slate-300">
+            JOB TITLE
+            <select 
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" 
+              name="jobTitle" 
+              onChange={(event) => setFormValues((current) => ({ ...current, jobTitle: event.target.value }))} 
+              value={formValues.jobTitle}
+            >
+              <option value="">Pilih Jenis Pekerjaan...</option>
+              {JOB_TITLES.map((job) => (
+                <option key={job} value={job}>{job}</option>
+              ))}
+            </select>
+            <FieldError message={state.fieldErrors?.jobTitle?.[0]} />
+          </label>
+
+          {/* ASSIGNED VESSEL (Dropdown Kapal Terdaftar dari Neon) */}
+          <label className="block text-sm text-slate-300">
+            ASSIGNED VESSEL
+            <select 
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" 
+              name="assignedVessel" 
+              onChange={(event) => setFormValues((current) => ({ ...current, assignedVessel: event.target.value }))} 
+              value={formValues.assignedVessel}
+            >
+              <option value="">Unassigned (Belum Ditugaskan)</option>
+              {VESSELS.map((vessel) => (
+                <option key={vessel.id} value={vessel.id}>{vessel.name}</option>
+              ))}
+            </select>
+            <FieldError message={state.fieldErrors?.assignedVessel?.[0]} />
+          </label>
+
+          {/* WORK SHIFT */}
           <label className="block text-sm text-slate-300">WORK SHIFT<select className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" name="workShift" onChange={(event) => setFormValues((current) => ({ ...current, workShift: event.target.value }))} value={formValues.workShift}>{["MORNING", "SWING", "NIGHT"].map((shift) => (<option key={shift} value={shift}>{shift}</option>))}</select></label>
+          
+          {/* WORK HOURS */}
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm text-slate-300">START HOUR<input className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" max="23" min="0" name="startHour" onChange={(event) => setFormValues((current) => ({ ...current, startHour: event.target.value }))} type="number" value={formValues.startHour} /><FieldError message={state.fieldErrors?.startHour?.[0]} /></label>
             <label className="block text-sm text-slate-300">END HOUR<input className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" max="23" min="0" name="endHour" onChange={(event) => setFormValues((current) => ({ ...current, endHour: event.target.value }))} type="number" value={formValues.endHour} /><FieldError message={state.fieldErrors?.endHour?.[0]} /></label>
           </div>
+          
           <SubmitButton editing={Boolean(editingId)} />
         </div>
       </form>
 
+      {/* Bagian Tabel / Direktori Personel */}
       <div className="rounded-3xl border border-white/10 bg-slate-900/90 p-5 shadow-2xl shadow-black/20">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
           <div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Personnel Directory</p><p className="mt-2 text-sm text-slate-400">Data crew dibaca langsung dari Neon.</p></div>
