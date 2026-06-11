@@ -98,13 +98,13 @@ export async function fetchFleetVessels() {
   const sql = getSql();
   try {
     const rows = await sql`
-      SELECT id
+      SELECT id, subtitle
       FROM fleet_vessels
       ORDER BY id ASC
     `;
     return rows.map((row: any) => ({
-      name: row.id || "",
-      code: row.id || "",
+      name: row.subtitle || row.id || "",   // ← pakai subtitle sebagai label nama
+      code: row.id || "",                    // ← id tetap jadi kode registrasi
     }));
   } catch (error) {
     console.error("fetchFleetVessels error:", error);
