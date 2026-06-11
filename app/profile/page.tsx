@@ -158,7 +158,7 @@ export default async function ProfilePage() {
                 fontFamily: "Share Tech Mono", letterSpacing: "0.1em", textTransform: "uppercase",
               }}
             >
-              ← {isAdmin ? "Admin Panel" : "Dashboard"}
+              ← {isAdmin ? "Dashboard Admin" : "Dashboard"}
             </a>
           </header>
 

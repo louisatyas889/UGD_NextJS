@@ -56,11 +56,13 @@ export async function PUT(
     const id = parseId(rawId);
 
     if (!id) {
-      // Diubah ke key 'error' agar terbaca oleh frontend (errData.error)
       return NextResponse.json({ error: "ID cargo tidak valid." }, { status: 400 });
     }
 
+    // Ambil payload mentah dari frontend
     const payload = await request.json();
+    
+    // Teruskan ke admin-cargo.ts yang sudah kita lengkapi pelindungnya
     const record = await updateAdminCargoRecord(id, payload);
 
     if (!record) {
@@ -72,13 +74,13 @@ export async function PUT(
 
     return NextResponse.json(record);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("PUT /api/admin/cargo/[id] error", error);
 
+    // 1. Tangkap jika error masih berupa bawaan murni ZodError
     if (error instanceof ZodError) {
       return NextResponse.json(
         {
-          // Diubah ke key 'error' agar divalidasi dengan benar di modal frontend
           error: error.issues[0]?.message ?? "Validasi form gagal.",
           issues: error.issues,
         },
@@ -86,6 +88,16 @@ export async function PUT(
       );
     }
 
+    // 2. Tangkap custom error dari throw new Error(...) yang kita buat di admin-cargo.ts
+    // Ini memastikan pesan spesifik (seperti "Berat barang harus lebih dari 0") sampai ke frontend
+    if (error.message) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+
+    // Fallback jika database putus
     return NextResponse.json(
       { error: "Gagal memperbarui data cargo." },
       { status: 500 },

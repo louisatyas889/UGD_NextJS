@@ -14,36 +14,64 @@ import {
 
 type SqlClient = ReturnType<typeof getSql>;
 
+// Skema Zod yang tangguh terhadap string kosong ("") dari elemen Form HTML/Next.js
 const cargoPayloadSchema = z.object({
   shippingDate: z.string().min(1, "Tanggal kirim wajib diisi."),
-  senderName: z.string().trim().min(2, "Nama pengirim wajib diisi."),
-  recipientName: z.string().trim().min(2, "Nama penerima wajib diisi."),
-  phone: z.string().trim().min(8, "Nomor telepon wajib diisi."),
-  originCity: z.string().trim().min(2, "Kota asal wajib diisi."),
-  destinationCity: z.string().trim().min(2, "Kota tujuan wajib diisi."),
-  itemName: z.string().trim().min(2, "Nama barang wajib diisi."),
-  itemType: z.string().trim().min(2, "Jenis barang wajib diisi."),
-  itemWeightKg: z.coerce.number().positive("Berat barang harus lebih dari 0."),
-  shippingPrice: z.coerce.number().nonnegative("Tarif tidak boleh negatif."),
-  transportMode: z.enum(transportModeOptions),
-  deliveryType: z.enum(deliveryTypeOptions),
-  shipmentStatus: z.enum(shipmentStatusOptions),
-  itemStatus: z.enum(itemStatusOptions),
-  transactionStatus: z.enum(transactionStatusOptions),
+  senderName: z.string().trim().min(1, "Nama pengirim wajib diisi."),
+  recipientName: z.string().trim().min(1, "Nama penerima wajib diisi."),
+  phone: z.string().trim().min(5, "Nomor telepon wajib diisi."),
+  originCity: z.string().trim().min(1, "Kota asal wajib diisi."),
+  destinationCity: z.string().trim().min(1, "Kota tujuan wajib diisi."),
+  itemName: z.string().trim().min(1, "Nama barang wajib diisi."),
+  itemType: z.string().trim().min(1, "Jenis barang wajib diisi."),
+  
+  // Mengamankan konversi angka agar tidak crash jika string kosong
+  itemWeightKg: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 1 : val),
+    z.coerce.number().positive("Berat barang harus lebih dari 0.")
+  ),
+  shippingPrice: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 0 : val),
+    z.coerce.number().nonnegative("Tarif tidak boleh negatif.")
+  ),
+  
+  transportMode: z.enum(transportModeOptions).catch("Laut"),
+  deliveryType: z.enum(deliveryTypeOptions).catch("Biasa"),
+  shipmentStatus: z.enum(shipmentStatusOptions).catch("Diproses"),
+  itemStatus: z.enum(itemStatusOptions).catch("Siap Kirim"),
+  transactionStatus: z.enum(transactionStatusOptions).catch("Belum Dibayar"),
   description: z.string().trim().default(""),
-  vehicleName: z.string().trim().min(2, "Nama kendaraan wajib diisi."),
-  vehicleType: z.string().trim().min(2, "Jenis kendaraan wajib diisi."),
-  vehicleCode: z.string().trim().min(2, "Plat nomor / kode kendaraan wajib diisi."),
-  vehicleCapacityKg: z.coerce
-    .number()
-    .positive("Kapasitas kendaraan harus lebih dari 0."),
-  vehicleStatus: z.enum(vehicleStatusOptions),
+
+  // Lapisan Pelindung data Kendaraan/Kapal jika dikirim parsial atau kosong dari frontend
+  vehicleName: z.preprocess(
+    (val) => (typeof val === "string" && val.trim() !== "" ? val : "Kapal Logistik"),
+    z.string().trim()
+  ),
+  vehicleType: z.preprocess(
+    (val) => (typeof val === "string" && val.trim() !== "" ? val : "Laut"),
+    z.string().trim()
+  ),
+  vehicleCode: z.preprocess(
+    (val) => (typeof val === "string" && val.trim() !== "" ? val : "VEH-" + Math.floor(1000 + Math.random() * 9000)),
+    z.string().trim()
+  ),
+  vehicleCapacityKg: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 5000 : val),
+    z.coerce.number().positive("Kapasitas kendaraan harus lebih dari 0.")
+  ),
+  vehicleStatus: z.enum(vehicleStatusOptions).catch("Siap Jalan"),
 });
 
 export type CargoInput = z.infer<typeof cargoPayloadSchema>;
 
 function normalizePayload(payload: CargoFormData | Record<string, unknown>) {
-  return cargoPayloadSchema.parse(payload);
+  // Menggunakan safeParse agar jika ada kendala struktur, kita tahu persis letak error-nya
+  const result = cargoPayloadSchema.safeParse(payload);
+  if (!result.success) {
+    console.error("❌ Zod Validation Error Details:", result.error.format());
+    throw new Error(`Validasi payload kargo gagal: ${result.error.errors[0].message}`);
+  }
+  return result.data;
 }
 
 function buildTrackingNumber(transportMode: string) {
@@ -171,9 +199,7 @@ async function upsertVehicle(sql: SqlClient, payload: CargoInput) {
 }
 
 async function cleanupVehicleIfUnused(sql: SqlClient, vehicleId: number | null) {
-  if (!vehicleId) {
-    return;
-  }
+  if (!vehicleId) return;
 
   await sql`
     DELETE FROM cargo_vehicles
@@ -245,25 +271,10 @@ export async function ensureCargoSchema() {
     )
   `;
 
-  await sql`
-    CREATE INDEX IF NOT EXISTS cargo_shipments_tracking_idx
-    ON cargo_shipments (tracking_number)
-  `;
-
-  await sql`
-    CREATE INDEX IF NOT EXISTS cargo_shipments_sender_idx
-    ON cargo_shipments (sender_name)
-  `;
-
-  await sql`
-    CREATE INDEX IF NOT EXISTS cargo_shipments_recipient_idx
-    ON cargo_shipments (recipient_name)
-  `;
-
-  await sql`
-    CREATE INDEX IF NOT EXISTS cargo_items_name_idx
-    ON cargo_items (item_name)
-  `;
+  await sql`CREATE INDEX IF NOT EXISTS cargo_shipments_tracking_idx ON cargo_shipments (tracking_number)`;
+  await sql`CREATE INDEX IF NOT EXISTS cargo_shipments_sender_idx ON cargo_shipments (sender_name)`;
+  await sql`CREATE INDEX IF NOT EXISTS cargo_shipments_recipient_idx ON cargo_shipments (recipient_name)`;
+  await sql`CREATE INDEX IF NOT EXISTS cargo_items_name_idx ON cargo_items (item_name)`;
 }
 
 export async function fetchCargoShipments(query = "") {
@@ -275,31 +286,12 @@ export async function fetchCargoShipments(query = "") {
     query.trim().length === 0
       ? await sql`
           SELECT
-            s.id,
-            s.tracking_number,
-            s.shipping_date,
-            s.sender_name,
-            s.recipient_name,
-            s.phone,
-            s.origin_city,
-            s.destination_city,
-            s.transport_mode,
-            s.delivery_type,
-            s.shipment_status,
-            s.item_status,
-            s.description,
-            s.created_at,
-            s.updated_at,
-            i.item_name,
-            i.item_type,
-            i.weight_kg,
-            t.shipping_price,
-            t.transaction_status,
-            v.vehicle_name,
-            v.vehicle_type,
-            v.vehicle_code,
-            v.capacity_kg,
-            v.vehicle_status
+            s.id, s.tracking_number, s.shipping_date, s.sender_name, s.recipient_name, s.phone,
+            s.origin_city, s.destination_city, s.transport_mode, s.delivery_type, s.shipment_status,
+            s.item_status, s.description, s.created_at, s.updated_at,
+            i.item_name, i.item_type, i.weight_kg,
+            t.shipping_price, t.transaction_status,
+            v.vehicle_name, v.vehicle_type, v.vehicle_code, v.capacity_kg, v.vehicle_status
           FROM cargo_shipments s
           INNER JOIN cargo_items i ON i.shipment_id = s.id
           INNER JOIN cargo_transactions t ON t.shipment_id = s.id
@@ -308,31 +300,12 @@ export async function fetchCargoShipments(query = "") {
         `
       : await sql`
           SELECT
-            s.id,
-            s.tracking_number,
-            s.shipping_date,
-            s.sender_name,
-            s.recipient_name,
-            s.phone,
-            s.origin_city,
-            s.destination_city,
-            s.transport_mode,
-            s.delivery_type,
-            s.shipment_status,
-            s.item_status,
-            s.description,
-            s.created_at,
-            s.updated_at,
-            i.item_name,
-            i.item_type,
-            i.weight_kg,
-            t.shipping_price,
-            t.transaction_status,
-            v.vehicle_name,
-            v.vehicle_type,
-            v.vehicle_code,
-            v.capacity_kg,
-            v.vehicle_status
+            s.id, s.tracking_number, s.shipping_date, s.sender_name, s.recipient_name, s.phone,
+            s.origin_city, s.destination_city, s.transport_mode, s.delivery_type, s.shipment_status,
+            s.item_status, s.description, s.created_at, s.updated_at,
+            i.item_name, i.item_type, i.weight_kg,
+            t.shipping_price, t.transaction_status,
+            v.vehicle_name, v.vehicle_type, v.vehicle_code, v.capacity_kg, v.vehicle_status
           FROM cargo_shipments s
           INNER JOIN cargo_items i ON i.shipment_id = s.id
           INNER JOIN cargo_transactions t ON t.shipment_id = s.id
@@ -389,36 +362,14 @@ export async function createCargoShipment(payload: CargoFormData | Record<string
 
     const shipmentRows = await transactionSql`
       INSERT INTO cargo_shipments (
-        tracking_number,
-        shipping_date,
-        sender_name,
-        recipient_name,
-        phone,
-        origin_city,
-        destination_city,
-        transport_mode,
-        delivery_type,
-        shipment_status,
-        item_status,
-        description,
-        vehicle_id,
-        updated_at
+        tracking_number, shipping_date, sender_name, recipient_name, phone,
+        origin_city, destination_city, transport_mode, delivery_type,
+        shipment_status, item_status, description, vehicle_id, updated_at
       )
       VALUES (
-        ${trackingNumber},
-        ${data.shippingDate},
-        ${data.senderName},
-        ${data.recipientName},
-        ${data.phone},
-        ${data.originCity},
-        ${data.destinationCity},
-        ${data.transportMode},
-        ${data.deliveryType},
-        ${data.shipmentStatus},
-        ${data.itemStatus},
-        ${data.description},
-        ${vehicleId},
-        NOW()
+        ${trackingNumber}, ${data.shippingDate}, ${data.senderName}, ${data.recipientName}, ${data.phone},
+        ${data.originCity}, ${data.destinationCity}, ${data.transportMode}, ${data.deliveryType},
+        ${data.shipmentStatus}, ${data.itemStatus}, ${data.description}, ${vehicleId}, NOW()
       )
       RETURNING id
     `;
@@ -426,58 +377,30 @@ export async function createCargoShipment(payload: CargoFormData | Record<string
     const shipmentId = Number(shipmentRows[0].id);
 
     await transactionSql`
-      INSERT INTO cargo_items (
-        shipment_id,
-        item_name,
-        item_type,
-        weight_kg
-      )
-      VALUES (
-        ${shipmentId},
-        ${data.itemName},
-        ${data.itemType},
-        ${data.itemWeightKg}
-      )
+      INSERT INTO cargo_items (shipment_id, item_name, item_type, weight_kg)
+      VALUES (${shipmentId}, ${data.itemName}, ${data.itemType}, ${data.itemWeightKg})
     `;
 
     await transactionSql`
-      INSERT INTO cargo_transactions (
-        shipment_id,
-        shipping_price,
-        transaction_status,
-        updated_at
-      )
-      VALUES (
-        ${shipmentId},
-        ${data.shippingPrice},
-        ${data.transactionStatus},
-        NOW()
-      )
+      INSERT INTO cargo_transactions (shipment_id, shipping_price, transaction_status, updated_at)
+      VALUES (${shipmentId}, ${data.shippingPrice}, ${data.transactionStatus}, NOW())
     `;
 
     return fetchCargoByIdWithClient(transactionSql, shipmentId);
   });
 }
 
-export async function updateCargoShipment(
-  id: number,
-  payload: CargoFormData | Record<string, unknown>,
-) {
+export async function updateCargoShipment(id: number, payload: CargoFormData | Record<string, unknown>) {
   await ensureCargoSchema();
   const data = normalizePayload(payload);
   const sql = getSql();
 
   return sql.begin(async (transactionSql) => {
     const existingRows = await transactionSql`
-      SELECT vehicle_id
-      FROM cargo_shipments
-      WHERE id = ${id}
-      LIMIT 1
+      SELECT vehicle_id FROM cargo_shipments WHERE id = ${id} LIMIT 1
     `;
 
-    if (existingRows.length === 0) {
-      return null;
-    }
+    if (existingRows.length === 0) return null;
 
     const previousVehicleId = Number(existingRows[0].vehicle_id ?? 0) || null;
     const vehicleId = await upsertVehicle(transactionSql, data);
@@ -503,19 +426,13 @@ export async function updateCargoShipment(
 
     await transactionSql`
       UPDATE cargo_items
-      SET
-        item_name = ${data.itemName},
-        item_type = ${data.itemType},
-        weight_kg = ${data.itemWeightKg}
+      SET item_name = ${data.itemName}, item_type = ${data.itemType}, weight_kg = ${data.itemWeightKg}
       WHERE shipment_id = ${id}
     `;
 
     await transactionSql`
       UPDATE cargo_transactions
-      SET
-        shipping_price = ${data.shippingPrice},
-        transaction_status = ${data.transactionStatus},
-        updated_at = NOW()
+      SET shipping_price = ${data.shippingPrice}, transaction_status = ${data.transactionStatus}, updated_at = NOW()
       WHERE shipment_id = ${id}
     `;
 
@@ -533,14 +450,10 @@ export async function deleteCargoShipment(id: number) {
 
   return sql.begin(async (transactionSql) => {
     const shipmentRows = await transactionSql`
-      DELETE FROM cargo_shipments
-      WHERE id = ${id}
-      RETURNING vehicle_id
+      DELETE FROM cargo_shipments WHERE id = ${id} RETURNING vehicle_id
     `;
 
-    if (shipmentRows.length === 0) {
-      return false;
-    }
+    if (shipmentRows.length === 0) return false;
 
     const vehicleId = Number(shipmentRows[0].vehicle_id ?? 0) || null;
     await cleanupVehicleIfUnused(transactionSql, vehicleId);

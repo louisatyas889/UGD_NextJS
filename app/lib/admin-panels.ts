@@ -263,7 +263,7 @@ export async function fetchSecurityUsers() {
   await ensureAdminPanelSchemas();
   const sql = getSql();
   const rows = await sql`
-    SELECT id, key, name, role, status, avatar
+    SELECT id, "key", name, role, status, avatar
     FROM app_users
     ORDER BY role ASC, name ASC
   `;
@@ -461,7 +461,7 @@ export async function upsertSecurityUser(payload: Record<string, unknown>) {
   await sql`
     INSERT INTO app_users (
       id,
-      key,
+      "key",
       name,
       role,
       status,
@@ -479,7 +479,7 @@ export async function upsertSecurityUser(payload: Record<string, unknown>) {
     )
     ON CONFLICT (id)
     DO UPDATE SET
-      key = EXCLUDED.key,
+      "key" = EXCLUDED."key",
       name = EXCLUDED.name,
       role = EXCLUDED.role,
       status = EXCLUDED.status,

@@ -14,40 +14,52 @@ import {
 type SqlClient = ReturnType<typeof getSql>;
 
 // =========================================================================
-// 1. SKEMA VALIDASI ZOD 
+// 1. SKEMA VALIDASI ZOD (Sangat Tangguh Terhadap Input Kosong/HTML Form)
 // =========================================================================
 const cargoCreateSchema = z.object({
   shippingDate: z.string().min(1, "Tanggal kirim wajib diisi."),
-  senderName: z.string().trim().min(2, "Nama pengirim wajib diisi."),
-  recipientName: z.string().trim().min(2, "Nama penerima wajib diisi."),
+  senderName: z.string().trim().min(1, "Nama pengirim wajib diisi."),
+  recipientName: z.string().trim().min(1, "Nama penerima wajib diisi."),
   
-  // Sudah aman (Abaikan jika kosong dari client)
   phone: z.string().trim().default(""),
   itemType: z.string().trim().default(""),
   
-  originCity: z.string().trim().min(2, "Kota asal wajib diisi."),
-  destinationCity: z.string().trim().min(2, "Kota tujuan wajib diisi."),
-  itemName: z.string().trim().min(2, "Nama barang wajib diisi."),
-  itemWeightKg: z.coerce.number().positive("Berat barang harus lebih dari 0."),
-  shippingPrice: z.coerce.number().default(0), 
-  deliveryType: z.enum(deliveryTypeOptions),
-  shipmentStatus: z.enum(shipmentStatusOptions),
+  originCity: z.string().trim().min(1, "Kota asal wajib diisi."),
+  destinationCity: z.string().trim().min(1, "Kota tujuan wajib diisi."),
+  itemName: z.string().trim().min(1, "Nama barang wajib diisi."),
+  
+  // Mengamankan konversi angka jika menerima string kosong ("") dari client
+  itemWeightKg: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 1 : val),
+    z.coerce.number().positive("Berat barang harus lebih dari 0.")
+  ),
+  shippingPrice: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 0 : val),
+    z.coerce.number().nonnegative("Tarif tidak boleh negatif.")
+  ), 
+  
+  // Menggunakan .catch() agar otomatis menggunakan nilai default jika dropdown kosong/salah
+  deliveryType: z.enum(deliveryTypeOptions).catch("Biasa"),
+  shipmentStatus: z.enum(shipmentStatusOptions).catch("Diproses"),
   description: z.string().trim().default(""),
-  transportMode: z.enum(["Darat", "Udara", "Laut"]).default("Laut"),
-  itemStatus: z.enum(itemStatusOptions).default("Siap Kirim"),
-  transactionStatus: z.enum(transactionStatusOptions).default("Lunas"),
+  transportMode: z.enum(["Darat", "Udara", "Laut"]).catch("Laut"),
+  itemStatus: z.enum(itemStatusOptions).catch("Siap Kirim"),
+  transactionStatus: z.enum(transactionStatusOptions).catch("Lunas"),
   
   vehicleName: z.string().trim().default(""), 
   vehicleType: z.string().trim().default("Kapal Kargo"),
   vehicleCode: z.string().trim().default(""),
-  vehicleCapacityKg: z.coerce.number().nonnegative().default(0),
-  vehicleStatus: z.enum(vehicleStatusOptions).default("Siap Jalan"),
+  vehicleCapacityKg: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 0 : val),
+    z.coerce.number().nonnegative().default(0)
+  ),
+  vehicleStatus: z.enum(vehicleStatusOptions).catch("Siap Jalan"),
 });
 
 const cargoQuickUpdateSchema = z.object({
-  shipmentStatus: z.enum(shipmentStatusOptions),
+  shipmentStatus: z.enum(shipmentStatusOptions).catch("Diproses"),
   description: z.string().trim().default(""),
-  transactionStatus: z.enum(transactionStatusOptions).default("Lunas"),
+  transactionStatus: z.enum(transactionStatusOptions).catch("Lunas"),
 });
 
 export type AdminCargoCreateInput = z.infer<typeof cargoCreateSchema>;
@@ -210,8 +222,17 @@ export async function fetchAdminCargoSummary() {
 }
 
 export async function createAdminCargoRecord(payload: any) {
+  await ensureAdminCargoSchema();
   const sql = getSql();
-  const data = cargoCreateSchema.parse(payload);
+  
+  // Menggunakan safeParse agar jika ada anomali data, server tidak diam saja
+  const parsed = cargoCreateSchema.safeParse(payload);
+  if (!parsed.success) {
+    console.error("❌ Admin Cargo Zod Error Details:", parsed.error.format());
+    throw new Error(`Validasi kargo admin gagal: ${parsed.error.errors[0].message}`);
+  }
+  
+  const data = parsed.data;
   const trackingNumber = `CRG-${Math.floor(10000000 + Math.random() * 90000000)}`;
 
   return sql.begin(async (transactionSql) => {
@@ -237,55 +258,59 @@ export async function createAdminCargoRecord(payload: any) {
     `;
 
     await transactionSql`
-      INSERT INTO tracking_packages (
-        id,
-        package_size,
-        destination,
-        lat,
-        lng,
-        vessel_name,
-        updated_at
-      )
+      INSERT INTO tracking_packages (id, package_size, destination, lat, lng, vessel_name, updated_at)
       VALUES (
-        ${trackingNumber},
-        ${data.deliveryType},
-        ${data.destinationCity},
-        14.5995,
-        120.9842,
-        ${data.vehicleName || "Serena Cargo Vessel"},
-        NOW()
+        ${trackingNumber}, ${data.deliveryType}, ${data.destinationCity},
+        14.5995, 120.9842, ${data.vehicleName || "Serena Cargo Vessel"}, NOW()
       )
-      ON CONFLICT (id)
-      DO UPDATE SET
+      ON CONFLICT (id) DO UPDATE SET
         destination = EXCLUDED.destination,
         vessel_name = EXCLUDED.vessel_name,
         updated_at = NOW()
     `;
-
     return fetchCargoByIdWithClient(transactionSql, inserted[0].id);
   });
 }
 
 export async function updateAdminCargoRecord(id: number, payload: any) {
+  await ensureAdminCargoSchema();
   const sql = getSql();
+  
   return sql.begin(async (transactionSql) => {
     if (isFullUpdatePayload(payload)) {
-      const data = cargoCreateSchema.parse(payload);
+      const parsed = cargoCreateSchema.safeParse(payload);
+      if (!parsed.success) {
+        console.error("❌ Admin Cargo Update Zod Error Details:", parsed.error.format());
+        throw new Error(`Validasi pembaruan kargo gagal: ${parsed.error.errors[0].message}`);
+      }
+      const data = parsed.data;
+
       const updatedCargo = await transactionSql`
         UPDATE barang SET
-          tanggal_kirim = ${data.shippingDate}, nama_pengirim = ${data.senderName}, nama_penerima = ${data.recipientName},
-          no_telepon = ${data.phone}, negara_asal = ${data.originCity}, negara_tujuan = ${data.destinationCity},
-          nama_barang = ${data.itemName}, jenis_barang = ${data.itemType}, berat_barang_kg = ${data.itemWeightKg},
-          jenis_pengiriman = ${data.deliveryType}, nama_kendaraan = ${data.vehicleName}, kode_kendaraan = ${data.vehicleCode}, 
-          jenis_kendaraan = ${data.vehicleType}, kapasitas_kendaraan_kg = ${data.vehicleCapacityKg}, status_kendaraan = ${data.vehicleStatus},
-          status_pengiriman = ${data.shipmentStatus}, status_barang = ${data.itemStatus}, deskripsi = ${data.description}, updated_at = NOW()
+          tanggal_kirim = ${data.shippingDate},
+          nama_pengirim = ${data.senderName},
+          nama_penerima = ${data.recipientName},
+          no_telepon = ${data.phone},
+          negara_asal = ${data.originCity},
+          negara_tujuan = ${data.destinationCity},
+          nama_barang = ${data.itemName},
+          jenis_barang = ${data.itemType},
+          berat_barang_kg = ${data.itemWeightKg},
+          jenis_pengiriman = ${data.deliveryType},
+          nama_kendaraan = ${data.vehicleName},
+          jenis_kendaraan = ${data.vehicleType},
+          kode_kendaraan = ${data.vehicleCode},
+          kapasitas_kendaraan_kg = ${data.vehicleCapacityKg},
+          status_kendaraan = ${data.vehicleStatus},
+          status_pengiriman = ${data.shipmentStatus},
+          status_barang = ${data.itemStatus},
+          deskripsi = ${data.description},
+          updated_at = NOW()
         WHERE id = ${id}
         RETURNING id
       `;
 
-      if (updatedCargo.length === 0) {
-        return null;
-      }
+      if (updatedCargo.length === 0) return null;
 
       const updatedTransactions = await transactionSql`
         UPDATE transaksi SET
@@ -304,34 +329,52 @@ export async function updateAdminCargoRecord(id: number, payload: any) {
       }
 
       await transactionSql`
-        INSERT INTO tracking_packages (
-          id,
-          package_size,
-          destination,
-          lat,
-          lng,
-          vessel_name,
-          updated_at
-        )
+        INSERT INTO tracking_packages (id, package_size, destination, lat, lng, vessel_name, updated_at)
         SELECT
-          b.no_resi,
-          ${data.deliveryType},
-          ${data.destinationCity},
-          COALESCE(tp.lat, 14.5995),
-          COALESCE(tp.lng, 120.9842),
-          ${data.vehicleName || "Serena Cargo Vessel"},
-          NOW()
+          b.no_resi, ${data.deliveryType}, ${data.destinationCity},
+          COALESCE(tp.lat, 14.5995), COALESCE(tp.lng, 120.9842),
+          ${data.vehicleName || "Serena Cargo Vessel"}, NOW()
         FROM barang b
         LEFT JOIN tracking_packages tp ON tp.id = b.no_resi
         WHERE b.id = ${id}
-        ON CONFLICT (id)
-        DO UPDATE SET
+        ON CONFLICT (id) DO UPDATE SET
           destination = EXCLUDED.destination,
           vessel_name = EXCLUDED.vessel_name,
           updated_at = NOW()
-    `;
-    } else {
-      const data = cargoQuickUpdateSchema.parse(payload);
+      `;
+
+      // Sinkronisasi status armada ke tabel fleet_vessels jika kodenya cocok
+      const normalizedStatus = (data.shipmentStatus || "").toString();
+      const normalizedLower = normalizedStatus.toLowerCase();
+      const statusColor = normalizedLower.includes("en route") ? "#22d3ee" : normalizedLower.includes("delay") ? "#f87171" : "#a855f7";
+      const etaColor = normalizedLower.includes("delay") ? "#f87171" : statusColor;
+      const monitoring_icon = normalizedLower.includes("maintenance") ? "wrench" : "anchor";
+
+      const cargoCodeRaw = String(data.vehicleCode || "").trim();
+      const cargoCodeNormalized = cargoCodeRaw
+        .replace(/^KM\s+/i, "")
+        .replace(/^PL-\d+-/i, "")
+        .toUpperCase();
+
+      await transactionSql`
+        UPDATE fleet_vessels
+        SET
+          status = ${normalizedStatus},
+          status_color = ${statusColor},
+          eta = COALESCE(eta, '--'),
+          eta_color = ${etaColor},
+          monitoring_icon = ${monitoring_icon}
+        WHERE id = ${cargoCodeRaw} OR UPPER(id) LIKE ${`%${cargoCodeNormalized}`}
+      `;
+    } 
+    
+    else {
+      const parsed = cargoQuickUpdateSchema.safeParse(payload);
+      if (!parsed.success) {
+        throw new Error(`Validasi quick-update kargo gagal: ${parsed.error.errors[0].message}`);
+      }
+      const data = parsed.data;
+
       const updatedCargo = await transactionSql`
         UPDATE barang SET
           status_pengiriman = ${data.shipmentStatus},
@@ -341,9 +384,7 @@ export async function updateAdminCargoRecord(id: number, payload: any) {
         RETURNING id
       `;
 
-      if (updatedCargo.length === 0) {
-        return null;
-      }
+      if (updatedCargo.length === 0) return null;
 
       const updatedTransactions = await transactionSql`
         UPDATE transaksi SET

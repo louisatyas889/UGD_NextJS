@@ -1,11 +1,5 @@
-import type { Metadata } from "next";
 import DashboardClient from "./DashboardClient";
 import { fetchVesselData, fetchFleetAlerts, fetchTrackingPackages } from "../lib/data";
-
-export const metadata: Metadata = {
-  title: "Dashboard | Serena Sail",
-  description: "Dashboard untuk pengguna terautentikasi menampilkan status armada, peringatan, dan paket.",
-};
 
 export const revalidate = 0;
 

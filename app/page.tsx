@@ -3,19 +3,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 // --- INTERFACES TYPESCRIPT ---
 interface TrackingPackage {
   id: string;
   package_size: string;
-  dest: string; 
+  dest: string;
   lat: number;
   lng: number;
-  vesselName: string; 
+  vesselName: string;
 }
 
 // --- KOMPONEN UI NAVBAR ---
-const Navbar = () => (
+const Navbar = ({ onOpenProfile, onAdminLogin }: { onOpenProfile: () => void, onAdminLogin: () => void }) => (
   <nav className="fixed top-0 w-full z-50 bg-[#020617]/85 backdrop-blur-md border-b border-white/5 px-8 py-5">
     <div className="max-w-7xl mx-auto flex items-center justify-between">
       <Link href="/" className="flex items-center gap-3 group">
@@ -38,14 +39,17 @@ const Navbar = () => (
           <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></span>
           Tracing Paket
         </Link>
+        <button onClick={onOpenProfile} className="text-sm font-bold uppercase tracking-widest text-gray-400 hover:text-cyan-400 transition-colors">
+          Kunjungan Profil
+        </button>
       </div>
 
-      <Link 
-        href="/login" 
-        className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase tracking-widest text-gray-200 hover:text-white hover:bg-purple-600 hover:border-purple-500 transition-all duration-300 shadow-[0_0_20px_rgba(168,85,247,0.1)]"
+      <button
+        onClick={onAdminLogin}
+        className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase tracking-widest text-gray-200 hover:text-white hover:bg-purple-600 hover:border-purple-500 transition-all duration-300 shadow-[0_0_20px_rgba(168,85,247,0.1)] cursor-pointer"
       >
         Login Admin / User
-      </Link>
+      </button>
     </div>
   </nav>
 );
@@ -59,7 +63,7 @@ interface ServiceCardProps {
 }
 
 const ServiceCard: React.FC<ServiceCardProps> = ({ size, price, desc, details, onClick }) => (
-  <div 
+  <div
     onClick={onClick}
     className="bg-white/[0.04] backdrop-blur-md border border-white/10 p-10 rounded-2xl hover:bg-purple-500/10 hover:border-purple-500/40 cursor-pointer transition-all duration-500 group flex flex-col justify-between min-h-[400px]"
   >
@@ -80,15 +84,40 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ size, price, desc, details, o
 
 // --- KOMPONEN UTAMA (DEFAULT EXPORT) ---
 export default function Page() {
+  const router = useRouter();
   const [packageId, setPackageId] = useState<string>("");
   const [activePkg, setActivePkg] = useState<TrackingPackage | null>(null);
   const [trackingError, setTrackingError] = useState<string>("");
   const [isSearching, setIsSearching] = useState<boolean>(false);
-  
+
+  // State Modal & Multi-Step Flow
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [modalStep, setModalStep] = useState<"login" | "service" | "login_profile">("login");
   const [selectedService, setSelectedService] = useState<string>("");
   const [checkoutStatus, setCheckoutStatus] = useState<string>("");
-  
+  const [loginStatus, setLoginStatus] = useState<string>("");
+
+  // State Form Validations
+  const [submitAttemptedLogin, setSubmitAttemptedLogin] = useState<boolean>(false);
+  const [submitAttemptedService, setSubmitAttemptedService] = useState<boolean>(false);
+  const [submitAttemptedProfile, setSubmitAttemptedProfile] = useState<boolean>(false);
+
+  // State Form Input Login/Registrasi Customer
+  const [loginData, setLoginData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    phone: "",
+    address: ""
+  });
+
+  // State Form Kunjungan Profil
+  const [profileLoginData, setProfileLoginData] = useState({
+    email: "",
+    password: ""
+  });
+
+  // State Form Input Transaksi Layanan
   const [formData, setFormData] = useState({
     pengirim: "", penerima: "", telepon: "", asal: "", tujuan: "", barang: "", jenis_barang: "", berat: "", pembayaran: "QRIS", tanggal: ""
   });
@@ -101,7 +130,9 @@ export default function Page() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Inject Google Font Share Tech Mono jika belum ada
+    // Tambahkan block direct access login
+    sessionStorage.removeItem('adminLoginAllowed');
+
     if (!document.getElementById("share-tech-mono-font")) {
       const fontLink = document.createElement("link");
       fontLink.id = "share-tech-mono-font";
@@ -110,7 +141,6 @@ export default function Page() {
       document.head.appendChild(fontLink);
     }
 
-    // Inject Leaflet CSS jika belum ada
     if (!document.getElementById("leaflet-css")) {
       const link = document.createElement("link");
       link.id = "leaflet-css";
@@ -123,8 +153,6 @@ export default function Page() {
 
     const initMap = () => {
       if (!mapContainerRef.current || (window as any).L === undefined || leafletMap.current) return;
-      
-      // Mencegah error 'Map container is already initialized' pada React StrictMode
       if ((mapContainerRef.current as any)._leaflet_id) return;
 
       const L = (window as any).L;
@@ -139,13 +167,12 @@ export default function Page() {
       L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", {
         maxZoom: 19
       }).addTo(map);
-      
+
       leafletMap.current = map;
       mapInstance = map;
       setTimeout(() => { map.invalidateSize(); }, 300);
     };
 
-    // Pengecekan script Leaflet JS
     if ((window as any).L) {
       initMap();
     } else if (!document.getElementById("leaflet-script")) {
@@ -155,7 +182,6 @@ export default function Page() {
       script.onload = initMap;
       document.head.appendChild(script);
     } else {
-      // Jika script sedang loading oleh komponen lain, tunggu sebentar lalu coba init
       const interval = setInterval(() => {
         if ((window as any).L) {
           initMap();
@@ -165,7 +191,6 @@ export default function Page() {
       return () => clearInterval(interval);
     }
 
-    // Cleanup saat komponen unmount untuk menghindari kebocoran memori / objek peta ganda
     return () => {
       if (mapInstance) {
         mapInstance.remove();
@@ -192,46 +217,79 @@ export default function Page() {
         return;
       }
 
-      if (data.tracking && leafletMap.current) {
+      if (data.tracking || data.barang) {
         const L = (window as any).L;
-        
+
+        let destName = data.tracking ? data.tracking.destination : data.barang.negara_tujuan;
+        let vName = data.tracking ? data.tracking.vessel_name : "Serena Fleet (Stationary/Waiting)";
+        let pSize = data.tracking ? data.tracking.package_size : (data.barang.package_size || "Unknown");
+        let lat = data.tracking ? parseFloat(data.tracking.lat) : 0;
+        let lng = data.tracking ? parseFloat(data.tracking.lng) : 0;
+
+        const destKey = destName.toLowerCase().trim();
+        const countryMap: Record<string, [number, number]> = {
+          "singapura": [1.3521, 103.8198],
+          "jepang": [36.2048, 138.2529],
+          "korea selatan": [35.9078, 127.7669],
+          "korea": [35.9078, 127.7669],
+          "thailand": [15.8700, 100.9925],
+          "filipina": [12.8797, 121.7740],
+          "china": [35.8617, 104.1954],
+          "amerika": [37.0902, -95.7129],
+          "amerika serikat": [37.0902, -95.7129],
+          "australia": [-25.2744, 133.7751]
+        };
+
+        if (countryMap[destKey]) {
+          lat = countryMap[destKey][0];
+          lng = countryMap[destKey][1];
+        } else if (!data.tracking && data.barang) {
+          lat = -0.7893;
+          lng = 113.9213;
+        }
+
         const foundPackage: TrackingPackage = {
-          id: data.tracking.id,
-          package_size: data.tracking.package_size,
-          dest: data.tracking.destination,
-          lat: parseFloat(data.tracking.lat),
-          lng: parseFloat(data.tracking.lng),
-          vesselName: data.tracking.vessel_name
+          id: data.tracking ? data.tracking.id : (data.barang.no_resi || searchId),
+          package_size: pSize,
+          dest: destName,
+          lat: lat,
+          lng: lng,
+          vesselName: vName
         };
 
         setActivePkg(foundPackage);
-        
-        leafletMap.current.invalidateSize();
-        leafletMap.current.flyTo([foundPackage.lat, foundPackage.lng], 6, { animate: true, duration: 2 });
 
-        if (currentMarker.current) currentMarker.current.remove();
+        if (leafletMap.current) {
+          leafletMap.current.invalidateSize();
+          leafletMap.current.flyTo([foundPackage.lat, foundPackage.lng], 5, { animate: true, duration: 2 });
 
-        const pulseIcon = L.divIcon({
-          className: 'map-pulse-icon',
-          html: `<div style="width:14px; height:14px; background:#22d3ee; border-radius:50%; box-shadow:0 0 15px #22d3ee;"></div>`,
-          iconSize: [14, 14]
-        });
+          if (currentMarker.current) currentMarker.current.remove();
 
-        currentMarker.current = L.marker([foundPackage.lat, foundPackage.lng], { icon: pulseIcon }).addTo(leafletMap.current);
-        currentMarker.current.bindPopup(
-          `<b style="color:black; font-family:sans-serif;">${foundPackage.vesselName}</b><br/>` +
-          `<span style="color:#4b5563; font-family:sans-serif;">Dest: ${foundPackage.dest}</span>`
-        ).openPopup();
-      
-      } else if (data.barang) {
-        setActivePkg(null);
-        setTrackingError(
-          `📦 Manifest Terdaftar: Barang dari [${data.barang.nama_pengirim}] tujuan [${data.barang.negara_tujuan}] ` +
-          `ditemukan di sistem dengan status operasional [${data.barang.status_barang}]. Menunggu keberangkatan armada kargo.`
-        );
+          const pulseIcon = L.divIcon({
+            className: 'map-pulse-icon',
+            html: `<div style="width:14px; height:14px; background:#22d3ee; border-radius:50%; box-shadow:0 0 15px #22d3ee;"></div>`,
+            iconSize: [14, 14]
+          });
+
+          currentMarker.current = L.marker([foundPackage.lat, foundPackage.lng], { icon: pulseIcon }).addTo(leafletMap.current);
+          currentMarker.current.bindPopup(
+            `<b style="color:black; font-family:sans-serif;">${foundPackage.vesselName}</b><br/>` +
+            `<span style="color:#4b5563; font-family:sans-serif;">Dest: ${foundPackage.dest}</span>`
+          ).openPopup();
+        }
+
+        if (!data.tracking && data.barang) {
+          setTrackingError(
+            `📦 Manifest Terdaftar: Barang dari [${data.barang.nama_pengirim}] tujuan [${data.barang.negara_tujuan}] ` +
+            `ditemukan di sistem dengan status operasional [${data.barang.status_barang || 'Menunggu Keberangkatan'}]. Menunggu keberangkatan armada kargo.`
+          );
+        } else {
+          setTrackingError("");
+        }
+
       } else {
         setActivePkg(null);
-        setTrackingError("❌ Nomor resi kargo atau ID Kontainer tidak terdaftar di database manifest.");
+        setTrackingError("Nomor resi kargo atau ID Kontainer tidak terdaftar di database manifest.");
       }
     } catch (err) {
       console.error(err);
@@ -242,9 +300,129 @@ export default function Page() {
     }
   };
 
+  // --- HANDLER SUBMIT KUNJUNGAN PROFIL ---
+  const handleProfileLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitAttemptedProfile(true);
+
+    if (!profileLoginData.email || !profileLoginData.password) {
+      setLoginStatus("Harap isi seluruh kolom untuk login.");
+      return;
+    }
+
+    setLoginStatus("⏳ Memproses otentikasi identitas akun ke Neon Database...");
+
+    try {
+      const payload = {
+        name: "Existing User",
+        email: profileLoginData.email,
+        password: profileLoginData.password,
+        phone: "",
+        address: ""
+      };
+
+      const response = await fetch('/api/customer-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const responseText = await response.text();
+
+      if (!response.ok || responseText.startsWith("<!DOCTYPE") || responseText.includes("<html")) {
+        console.error("Gagal memproses JSON. Mendapatkan respons HTML:", responseText);
+        throw new Error(`Server API mengembalikan respons non-JSON (${response.status}). Pastikan endpoint ditempatkan pada folder 'app/api/customer-login/route.ts'.`);
+      }
+
+      const data = JSON.parse(responseText);
+
+      if (data.error) {
+         throw new Error(data.error);
+      }
+
+      setLoginStatus("Otentikasi Berhasil! Menyinkronkan session...");
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("serena_customer_session", JSON.stringify({
+          id: data.id || "SS-USER",
+          name: data.name || "Customer",
+          email: profileLoginData.email,
+          phone: data.phone || "",
+          address: data.address || ""
+        }));
+      }
+
+      setTimeout(() => {
+        setLoginStatus("Login Berhasil! Mengalihkan ke profil...");
+        setTimeout(() => {
+          window.location.href = "/profile_costumer";
+        }, 1000);
+      }, 1500);
+    } catch (err: any) {
+      console.error(err);
+      setLoginStatus(`${err.message || "Kehilangan sinyal logistik. Gagal memproses akun."}`);
+    }
+  };
+
+  // --- HANDLER SUBMIT LOGIN/REGISTER CUSTOMER ---
+  const handleCustomerLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!loginData.name || !loginData.email || !loginData.password || !loginData.phone || !loginData.address) {
+      setLoginStatus("Harap lengkapi seluruh formulir yang wajib diisi.");
+      return;
+    }
+
+    setLoginStatus("Sedang memproses autentikasi ke database Neon...");
+
+    try {
+      const response = await fetch('/api/customer-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginData),
+      });
+
+      const responseText = await response.text();
+
+      if (!response.ok || responseText.startsWith("<!DOCTYPE") || responseText.includes("<html")) {
+        console.error("Gagal memproses JSON. Mendapatkan respons HTML:", responseText);
+        throw new Error(`Server API mengembalikan respons non-JSON (${response.status}). Pastikan endpoint ditempatkan pada folder 'app/api/customer-login/route.ts'.`);
+      }
+
+      const data = JSON.parse(responseText);
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setLoginStatus("✅ Autentikasi Customer Berhasil! Membuka formulir layanan...");
+
+      setFormData(prev => ({
+        ...prev,
+        pengirim: loginData.name,
+        telepon: loginData.phone
+      }));
+
+      setTimeout(() => {
+        setModalStep("service");
+        setLoginStatus("");
+      }, 1500);
+
+    } catch (err: any) {
+      console.error(err);
+      setLoginStatus(`❌ ${err.message || "Kegagalan sistem jaringan. Tidak dapat memverifikasi akun customer."}`);
+    }
+  };
+
+  // --- HANDLER SUBMIT DATA LAYANAN / MANIFEST ---
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    if (!formData.pengirim || !formData.penerima || !formData.telepon || !formData.asal || !formData.tujuan || !formData.barang || !formData.jenis_barang || !formData.berat || !formData.tanggal) {
+      setCheckoutStatus("Harap lengkapi semua kolom form layanan pengiriman.");
+      return;
+    }
+
     const generatedId = `PKG-${Math.floor(100000 + Math.random() * 900000)}`;
     setCheckoutStatus("Sedang memproses dan mengamankan data ke database Neon...");
 
@@ -265,30 +443,66 @@ export default function Page() {
           jenis_barang: formData.jenis_barang,
           berat: parseFloat(formData.berat) || 0,
           no_telepon: formData.telepon,
-          tanggal: formData.tanggal
+          tanggal: formData.tanggal,
+          status_barang: "Manifested / Menunggu Kapal"
         }),
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
 
-      if (data.error) {
-        setCheckoutStatus(`❌ Gagal: ${data.error}`);
-        return;
+      if (!response.ok || responseText.startsWith("<!DOCTYPE")) {
+        console.error("Gagal memuat manifes kargo otomatis:", responseText);
+        throw new Error("Gagal mendaftarkan manifest muatan laut. Silakan coba sesaat lagi.");
       }
 
-      setCheckoutStatus(`✅ Transaksi Berhasil! ID Resi Otomatis: ${generatedId}. Data sudah disimpan aman di database Neon.`);
-      
-      setTimeout(() => {
-        setIsModalOpen(false);
-        setCheckoutStatus("");
-        setFormData({ pengirim: "", penerima: "", telepon: "", asal: "", tujuan: "", barang: "", jenis_barang: "", berat: "", pembayaran: "QRIS", tanggal: "" });
-      }, 6000);
+      const data = JSON.parse(responseText);
 
-    } catch (err) {
-      console.error(err);
-      setCheckoutStatus("❌ Kegagalan sistem jaringan. Tidak dapat mengirim data manifest.");
-    }
-  };
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setCheckoutStatus(`Transaksi Berhasil! ID Resi Otomatis: ${generatedId}. Data sudah disimpan aman di database Neon.`);
+
+      localStorage.setItem("serena_customer_session", JSON.stringify({
+        id: loginData.email || "SS-USER",
+        name: formData.pengirim,
+        email: loginData.email,
+        phone: formData.telepon,
+        address: loginData.address,
+        password: loginData.password
+      }));
+
+      localStorage.setItem("serena_latest_cargo", JSON.stringify({
+        id: Date.now(),
+        no_resi: generatedId,
+        tanggal_kirim: formData.tanggal,
+        nama_pengirim: formData.pengirim,
+        nama_penerima: formData.penerima,
+        no_telepon: formData.telepon,
+        negara_asal: formData.asal,
+        negara_tujuan: formData.tujuan,
+        nama_barang: formData.barang,
+        jenis_barang: formData.jenis_barang,
+        berat: parseFloat(formData.berat),
+        harga: selectedService === "Small" ? 250000 : selectedService === "Medium" ? 1200000 : 5500000,
+        status_pengiriman: "Menunggu Keberangkatan",
+        status_barang: "Manifested / Menunggu Kapal",
+        status_transaksi: "Lunas",
+        moda_pengiriman: "Sea Freight",
+        jenis_pengiriman: `${selectedService} Package`,
+        nama_kendaraan: "Serena Fleet"
+      }));
+
+      setTimeout(() => {
+        window.location.href = "/profile_costumer"; // Alihkan langsung ke profil
+      }, 2000);
+
+      } catch (err: any) {
+        // Blok catch ini tetap dipertahankan ya!
+        console.error(err);
+        setCheckoutStatus(`${err.message || "Kegagalan sistem jaringan. Tidak dapat mengirim data manifest."}`);
+      }
+    };
 
   const handleZoom = (type: "in" | "out") => {
     if (!leafletMap.current) return;
@@ -301,11 +515,43 @@ export default function Page() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleLoginInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setLoginData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleProfileLoginChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setProfileLoginData(prev => ({ ...prev, [name]: value }));
+  };
+
   const openForm = (serviceName: string) => {
     setSelectedService(serviceName);
+    setSubmitAttemptedLogin(false);
+    setSubmitAttemptedService(false);
+    setLoginStatus("");
+    setModalStep("login");
     setIsModalOpen(true);
   };
 
+  const handleOpenProfile = () => {
+    if (typeof window !== "undefined") {
+      const session = localStorage.getItem("serena_customer_session");
+      if (session) {
+        window.location.href = "/profile_costumer";
+        return;
+      }
+    }
+    setSubmitAttemptedProfile(false);
+    setLoginStatus("");
+    setModalStep("login_profile");
+    setIsModalOpen(true);
+  };
+
+  const handleAdminLogin = () => {
+      sessionStorage.setItem('adminLoginAllowed', 'true');
+      router.push('/login');
+  };
   return (
     <main className="min-h-screen bg-[#020617] text-white font-sans selection:bg-cyan-500/30 overflow-x-hidden relative">
       <style dangerouslySetInnerHTML={{ __html: `
@@ -313,16 +559,14 @@ export default function Page() {
         .leaflet-popup-content-wrapper { border-radius: 8px; font-weight: bold; padding: 4px; }
       `}} />
 
-      <Navbar />
+      <Navbar onOpenProfile={handleOpenProfile} onAdminLogin={handleAdminLogin} />
 
       {/* HERO SECTION */}
       <section className="relative h-screen flex flex-col items-center justify-center text-center px-4 overflow-hidden">
         <div className="absolute w-[800px] h-[800px] bg-purple-600/10 blur-[180px] rounded-full -z-10" />
-        
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] select-none scale-125 md:scale-100 z-0">
           <Image src="/kapal.png" alt="Watermark Logo" width={550} height={550} priority className="object-contain" />
         </div>
-
         <div className="z-10 pt-20 relative">
           <h1 className="text-7xl md:text-[10rem] font-black tracking-tighter mb-6 italic leading-none bg-clip-text text-transparent bg-gradient-to-b from-white via-gray-200 to-purple-300 drop-shadow-[0_0_35px_rgba(168,85,247,0.25)]">
             SERENA SAIL
@@ -336,7 +580,7 @@ export default function Page() {
       {/* ABOUT US SECTION */}
       <section id="about" className="max-w-7xl mx-auto px-8 py-32 border-t border-white/5 relative">
         <div className="flex flex-col gap-24">
-          
+
           {/* VISI & MISI */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
             <div>
@@ -350,7 +594,7 @@ export default function Page() {
                 Menjadi perusahaan pelayaran internasional terdepan yang menghubungkan dunia melalui layanan transportasi laut yang aman, terpercaya, inovatif, dan berkelanjutan, serta memberikan nilai terbaik bagi pelanggan, mitra bisnis, dan masyarakat global.
               </p>
             </div>
-            
+
             <div className="border border-white/10 bg-gradient-to-b from-white/[0.03] to-transparent p-8 rounded-2xl relative overflow-hidden backdrop-blur-sm group hover:border-cyan-500/30 transition-all duration-500">
               <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/5 blur-2xl rounded-full group-hover:bg-cyan-500/10 transition-all"></div>
               <h3 style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 mb-6 uppercase tracking-wider">
@@ -393,31 +637,26 @@ export default function Page() {
           {/* TENTANG JARINGAN LAYANAN */}
           <div className="bg-gradient-to-br from-[#020617] via-purple-900/10 to-cyan-900/10 border border-white/10 rounded-3xl p-10 lg:p-16 relative overflow-hidden text-center shadow-[0_0_40px_rgba(34,211,238,0.05)]">
             <div className="absolute inset-0 bg-[url('/kapal.png')] opacity-[0.03] bg-center bg-no-repeat bg-contain"></div>
-            
             <h2 className="text-3xl font-bold mb-6 text-white relative z-10 uppercase italic tracking-tight">Tentang Jaringan Layanan SERENA SAIL</h2>
             <p className="text-gray-300 max-w-4xl mx-auto text-base leading-relaxed mb-8 relative z-10 font-medium">
-              Sebagai perusahaan pelayaran internasional yang terus berkembang, SERENA SAIL saat ini melayani pengiriman barang dan logistik ke tujuh negara tujuan utama yang menjadi pusat perdagangan dan distribusi di kawasan Asia-Pasifik hingga Amerika Utara. Jaringan pelayaran kami dirancang untuk memberikan layanan yang aman, efisien, dan tepat waktu bagi pelanggan yang ingin menjangkau pasar internasional.
+              Sebagai perusahaan pelayaran internasional yang terus berkembang, SERENA SAIL saat ini melayani pengiriman barang dan logistik ke delapan negara tujuan utama yang menjadi pusat perdagangan dan distribusi di kawasan Asia-Pasifik hingga Amerika Utara. Jaringan pelayaran kami dirancang untuk memberikan layanan yang aman, efisien, dan tepat waktu bagi pelanggan yang ingin menjangkau pasar internasional.
             </p>
-            
             <div className="flex flex-wrap justify-center gap-3 mb-10 relative z-10">
-              {["Singapura", "Jepang", "Filipina", "China", "Korea Selatan", "Amerika Serikat", "Australia"].map((country) => (
+              {["Singapura", "Jepang", "Thailand", "Filipina", "China", "Korea Selatan", "Amerika Serikat", "Australia"].map((country) => (
                 <span key={country} className="px-5 py-2.5 border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 rounded-full text-xs font-bold tracking-widest uppercase shadow-[0_0_15px_rgba(34,211,238,0.15)] hover:bg-cyan-400 hover:text-[#020617] transition-all cursor-default">
                   {country}
                 </span>
               ))}
             </div>
-            
             <p className="text-gray-400 max-w-4xl mx-auto text-sm leading-relaxed mb-12 relative z-10">
-              Meskipun masih tergolong sebagai perusahaan yang sedang memperluas jangkauan operasionalnya, SERENA SAIL berkomitmen untuk menghadirkan layanan pengiriman internasional yang dapat diandalkan melalui konektivitas pelabuhan strategis di ketujuh negara tersebut. Ke depan, kami akan terus mengembangkan jaringan pelayaran guna mendukung kebutuhan perdagangan global serta memperkuat peran Indonesia dalam rantai pasok internasional.
+              Meskipun masih tergolong sebagai perusahaan yang sedang memperluas jangkauan operasionalnya, SERENA SAIL berkomitmen untuk menghadirkan layanan pengiriman internasional yang dapat diandalkan melalui konektivitas pelabuhan strategis di kedelapan negara tersebut. Ke depan, kami akan terus mengembangkan jaringan pelayaran guna mendukung kebutuhan perdagangan global serta memperkuat peran Indonesia dalam rantai pasok internasional.
             </p>
-            
             <div className="inline-block relative z-10 bg-white/5 backdrop-blur-sm border border-white/10 px-8 py-5 rounded-2xl">
               <h3 className="text-xl md:text-3xl font-black italic tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.4)]">
                 "From Indonesia to the World's Key Trade Routes"
               </h3>
             </div>
           </div>
-
         </div>
       </section>
 
@@ -447,8 +686,8 @@ export default function Page() {
             <h3 style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-xl font-bold mb-8 uppercase tracking-tighter text-cyan-400">Masukkan ID Paket</h3>
             <div className="space-y-6">
               <div className="relative">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={packageId}
                   onChange={(e) => setPackageId(e.target.value)}
                   placeholder="Contoh: PKG-100293 atau LUT-0394392687-825"
@@ -457,15 +696,13 @@ export default function Page() {
                 />
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
               </div>
-              
-              <button 
+              <button
                 onClick={handleTrack}
                 disabled={isSearching}
                 className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-black py-5 rounded-xl uppercase tracking-[0.2em] text-xs transition-all transform hover:scale-[1.01] active:scale-[0.99] shadow-[0_4px_20px_rgba(147,51,234,0.2)] disabled:opacity-50"
               >
                 {isSearching ? "MENGHUBUNGKAN KE NEON DB..." : "LACAK SEKARANG"}
               </button>
-
               {trackingError && (
                 <div style={{ fontFamily: `'Share Tech Mono', monospace` }} className="mt-4 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl text-orange-300 text-xs font-medium leading-relaxed">
                   {trackingError}
@@ -481,18 +718,14 @@ export default function Page() {
                 <span style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-[10px] font-black uppercase tracking-widest text-cyan-400 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-pulse"></span> SATELLITE FEED: NEON DB ACTIVE
                 </span>
-                
                 <div className="flex gap-2">
                   <button onClick={() => handleZoom("in")} className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded border border-white/20 text-white font-mono text-sm transition-colors">+</button>
                   <button onClick={() => handleZoom("out")} className="w-8 h-8 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded border border-white/20 text-white font-mono text-sm transition-colors">-</button>
                 </div>
               </div>
-              
               <div className="flex-grow relative w-full h-full min-h-[300px] z-10">
                 <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
               </div>
-
-              {/* PANEL DETAIL DATA LIVE KAPAL */}
               <div className="p-6 bg-gradient-to-t from-black via-black/80 to-transparent z-[1000]">
                 <div className="flex justify-between items-end">
                   <div>
@@ -509,116 +742,178 @@ export default function Page() {
                   </div>
                 </div>
               </div>
-
             </div>
           </div>
         </div>
       </section>
 
-      {/* MODAL FORM ENTRY MANIFEST */}
+
+
+      {/* MODAL MULTI-STEP */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex justify-center items-start pt-20 pb-10 overflow-y-auto bg-black/85 backdrop-blur-sm p-4">
           <div className="bg-[#0c0c12] border border-white/10 rounded-2xl p-8 max-w-3xl w-full relative shadow-[0_0_50px_rgba(168,85,247,0.15)] animate-fade-in">
-            <button 
+            <button
               onClick={() => setIsModalOpen(false)}
               className="absolute top-6 right-6 text-gray-500 hover:text-white text-base transition-colors"
             >
               ✕
             </button>
-            
-            <div className="mb-6">
-              <p style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-[#a855f7] text-[10px] tracking-[0.14em] mb-2 uppercase">CARGO SECURE ENTRY FORM</p>
-              <h2 className="text-2xl font-bold tracking-tight text-gray-100">Formulir Data Diri Pengiriman</h2>
-              <p className="text-gray-400 text-xs mt-1">Jenis paket terikat otomatis pada pilihan layanan: <span className="text-cyan-400 font-bold uppercase">{selectedService}</span>.</p>
-            </div>
 
-            {checkoutStatus ? (
-              <div style={{ fontFamily: `'Share Tech Mono', monospace` }} className="p-6 bg-green-500/10 border border-green-500/30 rounded-xl text-green-400 text-center text-xs leading-relaxed">
-                {checkoutStatus}
+            {/* STEP: KUNJUNGAN PROFIL (LOGIN EXISTING CUSTOMER) */}
+            {modalStep === "login_profile" && (
+              <div>
+                <div className="mb-6">
+                  <p style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-[#22d3ee] text-[10px] tracking-[0.14em] mb-2 uppercase">PORTAL AKSES CUSTOMER</p>
+                  <h2 className="text-2xl font-bold tracking-tight text-gray-100">Kunjungan Profil</h2>
+                  <p className="text-gray-400 text-xs mt-1">Silakan masuk menggunakan akun yang sudah terdaftar untuk menuju halaman profil.</p>
+                </div>
+                <form onSubmit={handleProfileLoginSubmit} className="space-y-4">
+                  <div>
+                    <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">EMAIL AKUN *</label>
+                    <input required name="email" value={profileLoginData.email} onChange={handleProfileLoginChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 ${submitAttemptedProfile && !profileLoginData.email ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-cyan-500/50'}`} type="email" placeholder="Masukkan email Anda" />
+                  </div>
+                  <div>
+                    <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">PASSWORD *</label>
+                    <input required name="password" value={profileLoginData.password} onChange={handleProfileLoginChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 ${submitAttemptedProfile && !profileLoginData.password ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-cyan-500/50'}`} type="password" placeholder="Masukkan password Anda" />
+                  </div>
+                  {loginStatus && (
+                    <div style={{ fontFamily: `'Share Tech Mono', monospace` }} className={`p-4 border rounded-xl text-center text-xs leading-relaxed ${loginStatus.includes('❌') ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'}`}>
+                      {loginStatus}
+                    </div>
+                  )}
+                  <button type="submit" onClick={() => setSubmitAttemptedProfile(true)} style={{ fontFamily: `'Share Tech Mono', monospace` }} className="w-full mt-4 py-4 rounded-xl text-xs tracking-[0.14em] uppercase text-white bg-gradient-to-r from-[#22d3ee] to-[#7c3aed] hover:opacity-90 transition-opacity font-bold shadow-[0_0_25px_rgba(34,211,238,0.15)]">
+                    Masuk ke Profil
+                  </button>
+                </form>
               </div>
-            ) : (
-              <form onSubmit={handleCheckoutSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-                <div className="md:col-span-2 mb-3">
-                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">JENIS LAYANAN YANG DIPILIH</label>
-                  <input type="text" value={`${selectedService} Package`} disabled className="w-full rounded-xl border border-white/5 bg-white/[0.01] text-gray-500 px-3.5 py-2.5 text-xs cursor-not-allowed outline-none" />
-                </div>
+            )}
 
-                <div className="mb-3">
-                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NAMA PENGIRIM *</label>
-                  <input required name="pengirim" value={formData.pengirim} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Nama Lengkap Pengirim" />
+            {/* STEP 1: FORMULIR LOGIN / REGISTRASI CUSTOMER */}
+            {modalStep === "login" && (
+              <div>
+                <div className="mb-6">
+                  <p style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-[#22d3ee] text-[10px] tracking-[0.14em] mb-2 uppercase">STEP 1: CUSTOMER IDENTITY VERIFICATION</p>
+                  <h2 className="text-2xl font-bold tracking-tight text-gray-100">Formulir Pendaftaran Customer</h2>
+                  <p className="text-gray-400 text-xs mt-1">Harap isi identitas dan password Anda untuk mencatat manifest logistik ke database Neon.</p>
                 </div>
+                <form onSubmit={handleCustomerLoginSubmit} className="space-y-4">
+                  <div>
+                    <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NAMA LENGKAP CUSTOMER *</label>
+                    <input required name="name" value={loginData.name} onChange={handleLoginInputChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 ${submitAttemptedLogin && !loginData.name ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-cyan-500/50'}`} type="text" placeholder="Masukkan nama lengkap Anda" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">EMAIL CUSTOMER *</label>
+                      <input required name="email" value={loginData.email} onChange={handleLoginInputChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 ${submitAttemptedLogin && !loginData.email ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-cyan-500/50'}`} type="email" placeholder="contoh@email.com" />
+                    </div>
+                    <div>
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">PASSWORD *</label>
+                      <input required name="password" value={loginData.password} onChange={handleLoginInputChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 ${submitAttemptedLogin && !loginData.password ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-cyan-500/50'}`} type="password" placeholder="Buat password untuk akun ini" />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NOMOR TELEPON AKTIF *</label>
+                    <input required name="phone" value={loginData.phone} onChange={handleLoginInputChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 ${submitAttemptedLogin && !loginData.phone ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-cyan-500/50'}`} type="text" placeholder="Contoh: 0812xxxxxxxx" />
+                  </div>
+                  <div>
+                    <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">ALAMAT ASAL CUSTOMER *</label>
+                    <textarea required name="address" value={loginData.address} onChange={handleLoginInputChange} rows={3} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 resize-none ${submitAttemptedLogin && !loginData.address ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-cyan-500/50'}`} placeholder="Masukkan alamat lengkap rumah/kantor Anda" />
+                  </div>
+                  {loginStatus && (
+                    <div style={{ fontFamily: `'Share Tech Mono', monospace` }} className={`p-4 border rounded-xl text-center text-xs leading-relaxed ${loginStatus.includes('❌') ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'}`}>
+                      {loginStatus}
+                    </div>
+                  )}
+                  <button type="submit" onClick={() => setSubmitAttemptedLogin(true)} style={{ fontFamily: `'Share Tech Mono', monospace` }} className="w-full mt-4 py-4 rounded-xl text-xs tracking-[0.14em] uppercase text-white bg-gradient-to-r from-[#22d3ee] to-[#7c3aed] hover:opacity-90 transition-opacity font-bold shadow-[0_0_25px_rgba(34,211,238,0.15)]">
+                    Verifikasi Data & Lanjutkan Pemesanan
+                  </button>
+                </form>
+              </div>
+            )}
 
-                <div className="mb-3">
-                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NAMA PENERIMA *</label>
-                  <input required name="penerima" value={formData.penerima} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Nama Lengkap Penerima" />
+            {/* STEP 2: FORMULIR DATA DIRI PENGIRIMAN & BARANG LAYANAN */}
+            {modalStep === "service" && (
+              <div>
+                <div className="mb-6">
+                  <p style={{ fontFamily: `'Share Tech Mono', monospace` }} className="text-[#a855f7] text-[10px] tracking-[0.14em] mb-2 uppercase">STEP 2: CARGO SECURE ENTRY FORM</p>
+                  <h2 className="text-2xl font-bold tracking-tight text-gray-100">Formulir Data Diri Pengiriman</h2>
+                  <p className="text-gray-400 text-xs mt-1">Jenis paket terikat otomatis pada pilihan layanan: <span className="text-cyan-400 font-bold uppercase">{selectedService}</span>.</p>
                 </div>
-
-                <div className="mb-3">
-                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NOMOR TELEPON PENGIRIM *</label>
-                  <input required name="telepon" value={formData.telepon} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Contoh: 0812xxxxxxxx" />
-                </div>
-
-                <div className="mb-3">
-                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NAMA BARANG / KOMODITAS *</label>
-                  <input required name="barang" value={formData.barang} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Contoh: Paket Elektronik, Pakaian" />
-                </div>
-
-                <div className="mb-3">
-                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">KATEGORI JENIS BARANG *</label>
-                  <select required name="jenis_barang" value={formData.jenis_barang} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-[#0c0c12] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-cyan-500/50 transition-colors cursor-pointer appearance-none">
-                    <option value="" disabled>Pilih Kategori Barang...</option>
-                    <option value="Makanan">Makanan</option>
-                    <option value="MakeUp">MakeUp</option>
-                    <option value="Aksesories">Aksesories</option>
-                    <option value="Pakaian">Pakaian</option>
-                    <option value="Furnitur">Furnitur</option>
-                    <option value="Barang Berat">Barang Berat</option>
-                  </select>
-                </div>
-
-                <div className="mb-3">
-                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NEGARA ASAL PENGIRIMAN *</label>
-                  <input required name="asal" value={formData.asal} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Contoh: Indonesia, Jepang" />
-                </div>
-
-                <div className="mb-3">
-                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NEGARA TUJUAN PENGIRIMAN *</label>
-                  <input required name="tujuan" value={formData.tujuan} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="text" placeholder="Contoh: Filipina, Singapura" />
-                </div>
-
-                <div className="mb-3">
-                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">ESTIMASI BERAT BARANG (KG) *</label>
-                  <input required name="berat" value={formData.berat} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors placeholder:text-gray-600" type="number" step="0.1" min="0.1" placeholder="0.0" />
-                </div>
-
-                <div className="mb-3">
-                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">TANGGAL PENGIRIMAN *</label>
-                  <input required name="tanggal" value={formData.tanggal} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none focus:border-purple-500/50 transition-colors [color-scheme:dark]" type="date" />
-                </div>
-
-                <div className="mb-3 md:col-span-2">
-                  <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">METODE PEMBAYARAN KUNCI *</label>
-                  <select required name="pembayaran" value={formData.pembayaran} onChange={handleInputChange} className="w-full rounded-xl border border-white/10 bg-[#0c0c12] text-gray-200 px-3.5 py-2.5 text-xs outline-none cursor-pointer">
-                    <option value="QRIS">QRIS (Automated Feed)</option>
-                    <option value="Debit">Transfer Bank / Debit Virtual Account</option>
-                  </select>
-                </div>
-
-                <button 
-                  type="submit"
-                  style={{ fontFamily: `'Share Tech Mono', monospace` }}
-                  className="md:col-span-2 mt-4 py-4 rounded-xl text-xs tracking-[0.14em] uppercase text-white bg-gradient-to-r from-[#7c3aed] to-[#22d3ee] hover:opacity-90 transition-opacity font-bold shadow-[0_0_25px_rgba(34,211,238,0.15)]"
-                >
-                  Proses Pembayaran & Buat Resi Otomatis
-                </button>
-              </form>
+                {checkoutStatus ? (
+                  <div style={{ fontFamily: `'Share Tech Mono', monospace` }} className={`p-6 border rounded-xl text-center text-xs leading-relaxed ${checkoutStatus.includes('❌') ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-green-500/10 border-green-500/30 text-green-400'}`}>
+                    {checkoutStatus}
+                  </div>
+                ) : (
+                  <form onSubmit={handleCheckoutSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                    <div className="md:col-span-2 mb-3">
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">JENIS LAYANAN YANG DIPILIH</label>
+                      <input type="text" value={`${selectedService} Package`} disabled className="w-full rounded-xl border border-white/5 bg-white/[0.01] text-gray-500 px-3.5 py-2.5 text-xs cursor-not-allowed outline-none" />
+                    </div>
+                    <div className="mb-3">
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NAMA PENGIRIM (OTOMATIS) *</label>
+                      <input required name="pengirim" value={formData.pengirim} onChange={handleInputChange} className={`w-full rounded-xl border bg-white/[0.05] text-purple-300 px-3.5 py-2.5 text-xs outline-none transition-colors ${submitAttemptedService && !formData.pengirim ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-purple-500/50'}`} type="text" placeholder="Nama Lengkap Pengirim" />
+                    </div>
+                    <div className="mb-3">
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NAMA PENERIMA *</label>
+                      <input required name="penerima" value={formData.penerima} onChange={handleInputChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 ${submitAttemptedService && !formData.penerima ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-purple-500/50'}`} type="text" placeholder="Nama Lengkap Penerima" />
+                    </div>
+                    <div className="mb-3">
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NOMOR TELEPON PENGIRIM (OTOMATIS) *</label>
+                      <input required name="telepon" value={formData.telepon} onChange={handleInputChange} className={`w-full rounded-xl border bg-white/[0.05] text-purple-300 px-3.5 py-2.5 text-xs outline-none transition-colors ${submitAttemptedService && !formData.telepon ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-purple-500/50'}`} type="text" placeholder="Contoh: 0812xxxxxxxx" />
+                    </div>
+                    <div className="mb-3">
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NAMA BARANG / KOMODITAS *</label>
+                      <input required name="barang" value={formData.barang} onChange={handleInputChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 ${submitAttemptedService && !formData.barang ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-purple-500/50'}`} type="text" placeholder="Contoh: Paket Elektronik, Pakaian" />
+                    </div>
+                    <div className="mb-3">
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">KATEGORI JENIS BARANG *</label>
+                      <select required name="jenis_barang" value={formData.jenis_barang} onChange={handleInputChange} className={`w-full rounded-xl border bg-[#0c0c12] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors cursor-pointer appearance-none ${submitAttemptedService && !formData.jenis_barang ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-cyan-500/50'}`}>
+                        <option value="" disabled>Pilih Kategori Barang...</option>
+                        <option value="Makanan">Makanan</option>
+                        <option value="MakeUp">MakeUp</option>
+                        <option value="Aksesories">Aksesories</option>
+                        <option value="Pakaian">Pakaian</option>
+                        <option value="Furnitur">Furnitur</option>
+                        <option value="Barang Berat">Barang Berat</option>
+                      </select>
+                    </div>
+                    <div className="mb-3">
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NEGARA ASAL PENGIRIMAN *</label>
+                      <input required name="asal" value={formData.asal} onChange={handleInputChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 ${submitAttemptedService && !formData.asal ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-purple-500/50'}`} type="text" placeholder="Contoh: Indonesia, Jepang" />
+                    </div>
+                    <div className="mb-3">
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">NEGARA TUJUAN PENGIRIMAN *</label>
+                      <input required name="tujuan" value={formData.tujuan} onChange={handleInputChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 ${submitAttemptedService && !formData.tujuan ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-purple-500/50'}`} type="text" placeholder="Contoh: Filipina, Singapura" />
+                    </div>
+                    <div className="mb-3">
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">ESTIMASI BERAT BARANG (KG) *</label>
+                      <input required name="berat" value={formData.berat} onChange={handleInputChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors placeholder:text-gray-600 ${submitAttemptedService && !formData.berat ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-purple-500/50'}`} type="number" step="0.1" min="0.1" placeholder="0.0" />
+                    </div>
+                    <div className="mb-3">
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">TANGGAL PENGIRIMAN *</label>
+                      <input required name="tanggal" value={formData.tanggal} onChange={handleInputChange} className={`w-full rounded-xl border bg-white/[0.02] text-gray-200 px-3.5 py-2.5 text-xs outline-none transition-colors [color-scheme:dark] ${submitAttemptedService && !formData.tanggal ? 'border-red-500 focus:border-red-500' : 'border-white/10 focus:border-purple-500/50'}`} type="date" />
+                    </div>
+                    <div className="mb-3 md:col-span-2">
+                      <label style={{ fontFamily: `'Share Tech Mono', monospace` }} className="block mb-1.5 text-gray-400 text-[10px] tracking-wider uppercase">METODE PEMBAYARAN KUNCI *</label>
+                      <select required name="pembayaran" value={formData.pembayaran} onChange={handleInputChange} className={`w-full rounded-xl border bg-[#0c0c12] text-gray-200 px-3.5 py-2.5 text-xs outline-none cursor-pointer ${submitAttemptedService && !formData.pembayaran ? 'border-red-500 focus:border-red-500' : 'border-white/10'}`}>
+                        <option value="QRIS">QRIS (Automated Feed)</option>
+                        <option value="Debit">Transfer Bank / Debit Virtual Account</option>
+                      </select>
+                    </div>
+                    <button type="submit" onClick={() => setSubmitAttemptedService(true)} style={{ fontFamily: `'Share Tech Mono', monospace` }} className="md:col-span-2 mt-4 py-4 rounded-xl text-xs tracking-[0.14em] uppercase text-white bg-gradient-to-r from-[#7c3aed] to-[#22d3ee] hover:opacity-90 transition-opacity font-bold shadow-[0_0_25px_rgba(34,211,238,0.15)]">
+                      Proses Pembayaran & Buat Resi Otomatis
+                    </button>
+                  </form>
+                )}
+              </div>
             )}
           </div>
         </div>
       )}
 
-      <footer className="py-20 border-t border-white/5 text-center bg-[#010413]">
-        <p className="text-xs md:text-sm text-gray-500 tracking-[0.6em] font-black uppercase">© 2026 SERENA SAIL MARITIME LOGISTICS - ALL RIGHTS RESERVED</p>
+      <footer className="py-20 border-t border-white/5 text-center bg-[#01040f] text-gray-500 text-xs tracking-wider uppercase font-mono">
+        © {new Date().getFullYear()} SERENA SAIL Logistics. Connected securely via Neon Serverless PostgreSQL.
       </footer>
     </main>
   );

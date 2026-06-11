@@ -9,7 +9,11 @@ import type { PersonnelRecord } from "@/app/lib/admin-panels";
 import DataPaginationBar from "@/app/ui/data-pagination-bar";
 import DataSearchInput from "@/app/ui/data-search-input";
 
-type UserManagementTableProps = { currentHour: number; records: PersonnelRecord[] };
+type UserManagementTableProps = { 
+  currentHour: number; 
+  records: PersonnelRecord[];
+  dbVessels?: Array<{ id: string; dest?: string; status?: string }>;
+};
 type PersonnelFormValues = { id: string; name: string; workShift: string; jobTitle: string; startHour: string; endHour: string; assignedVessel: string };
 
 const emptyForm: PersonnelFormValues = { id: "", name: "", workShift: "MORNING", jobTitle: "", startHour: "6", endHour: "14", assignedVessel: "" };
@@ -27,13 +31,14 @@ const JOB_TITLES = [
   "Communications Officer"
 ];
 
-// Opsi daftar kapal yang terdaftar di database Neon (fleet_vessels)
-const VESSELS = [
+// Fallback opsi daftar kapal jika data dari database belum tersedia
+const FALLBACK_VESSELS = [
   { id: "PL-0909-MERKURIUS", name: "PL-0909-MERKURIUS" },
   { id: "PL-123-BULAN", name: "PL-123-BULAN" },
   { id: "PL-230-NANA", name: "PL-230-NANA" },
   { id: "PL-234-NARS", name: "PL-234-NARS" },
-  { id: "PL-245-MARS", name: "PL-245-MARS" }
+  { id: "PL-245-MARS", name: "PL-245-MARS" },
+  { id: "PL-770-ORION", name: "PL-770-ORION" }
 ];
 
 function toFormValues(record: PersonnelRecord): PersonnelFormValues {
@@ -69,7 +74,7 @@ function StatusBadge({ isOnDuty }: { isOnDuty: boolean }) {
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 20, fontSize: 9, fontFamily: "'Share Tech Mono', monospace", letterSpacing: "0.08em", background: isOnDuty ? "rgba(74,222,128,0.10)" : "rgba(248,113,113,0.08)", border: isOnDuty ? "1px solid rgba(74,222,128,0.25)" : "1px solid rgba(248,113,113,0.20)", color: isOnDuty ? "#4ade80" : "#f87171" }}><span style={{ width: 5, height: 5, borderRadius: "50%", background: isOnDuty ? "#4ade80" : "#f87171", boxShadow: `0 0 5px ${isOnDuty ? "#4ade80" : "#f87171"}` }} />{isOnDuty ? "ON DECK" : "OFF DUTY"}</span>;
 }
 
-export default function UserManagementTable({ currentHour, records }: UserManagementTableProps) {
+export default function UserManagementTable({ currentHour, records, dbVessels = [] }: UserManagementTableProps) {
   const router = useRouter();
   const [state, formAction] = useActionState(savePersonnelAction, initialPanelActionState);
   const [formValues, setFormValues] = useState<PersonnelFormValues>(emptyForm);
@@ -78,7 +83,18 @@ export default function UserManagementTable({ currentHour, records }: UserManage
   const [currentPage, setCurrentPage] = useState(1);
   const [feedback, setFeedback] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
   const deferredQuery = useDeferredValue(query);
+
+  // Sinkronisasi dinamis dengan database fleet
+  const vesselsList = dbVessels.length > 0 
+    ? dbVessels.map(v => ({ id: v.id, name: v.id })) 
+    : FALLBACK_VESSELS;
+
+  const getInputClass = (fieldName: string) => {
+    const hasError = state.fieldErrors?.[fieldName] || localErrors[fieldName];
+    return `mt-1 w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition ${hasError ? 'border-red-500 bg-red-500/10 text-slate-100 focus:border-red-400' : 'border-white/10 bg-slate-950/60 focus:border-cyan-400/60 text-slate-100'}`;
+  };
 
   // LOGIK: Menghitung nomor resi ID urutan otomatis berikutnya (Format: SS-XXX)
   const nextId = useMemo(() => {
@@ -105,10 +121,11 @@ export default function UserManagementTable({ currentHour, records }: UserManage
   useEffect(() => { 
     if (state.success) { 
       setFormValues({ ...emptyForm, id: nextId }); 
-      setEditingId(null); 
+      setEditingId(null);
+      setLocalErrors({});
       setFeedback(state.message); 
       router.refresh(); 
-    } 
+    }
   }, [router, state.message, state.success, nextId]);
   
   useEffect(() => { setCurrentPage(1); }, [deferredQuery]);
@@ -124,17 +141,48 @@ export default function UserManagementTable({ currentHour, records }: UserManage
   const startIndex = (safePage - 1) * 6;
   const paginatedRecords = filteredRecords.slice(startIndex, startIndex + 6);
 
-  function handleEdit(record: PersonnelRecord) { setFormValues(toFormValues(record)); setEditingId(record.id); setFeedback(`Mode edit: ${record.name}`); }
-  function handleReset() { setFormValues({ ...emptyForm, id: nextId }); setEditingId(null); setFeedback("Form crew di-reset."); }
+  function handleEdit(record: PersonnelRecord) { 
+    setFormValues(toFormValues(record)); 
+    setEditingId(record.id); 
+    setLocalErrors({});
+    setFeedback(`Mode edit: ${record.name}`); 
+  }
+  function handleReset() { 
+    setFormValues({ ...emptyForm, id: nextId }); 
+    setEditingId(null); 
+    setLocalErrors({});
+    setFeedback("Form crew di-reset."); 
+  }
 
   async function handleDelete(id: string) {
     if (!window.confirm(`Hapus crew ${id} dari database?`)) return;
     startTransition(async () => { const result = await deletePersonnelAction(id); setFeedback(result.message); if (result.success) { if (editingId === id) handleReset(); router.refresh(); } });
   }
 
+  const handleSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
+    if (editingId) {
+      const original = records.find(r => r.id === editingId);
+      if (original) {
+        const nameChanged = formValues.name !== original.name;
+        const shiftChanged = formValues.workShift !== original.workShift;
+        const jobChanged = formValues.jobTitle !== original.jobTitle;
+        const startChanged = formValues.startHour !== String(original.startHour);
+        const endChanged = formValues.endHour !== String(original.endHour);
+        const vesselChanged = formValues.assignedVessel !== (original.assignedVessel || "");
+
+        if (!nameChanged && !shiftChanged && !jobChanged && !startChanged && !endChanged && !vesselChanged) {
+          e.preventDefault();
+          setLocalErrors({ name: "!", workShift: "!", jobTitle: "!", startHour: "!", endHour: "!", assignedVessel: "!" });
+          setFeedback("⚠️ Gagal: Tidak ada perubahan data terdeteksi. Silakan ubah minimal satu kolom.");
+          return;
+        }
+      }
+    }
+  };
+
   return (
     <div className="grid gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
-      <form action={formAction} className="rounded-3xl border border-white/10 bg-gradient-to-b from-slate-900/95 to-slate-950/95 p-5 shadow-2xl shadow-black/20">
+      <form action={formAction} onSubmit={handleSubmitWrapper} className="rounded-3xl border border-white/10 bg-gradient-to-b from-slate-900/95 to-slate-950/95 p-5 shadow-2xl shadow-black/20">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div><p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Crew Form</p><h2 className="mt-2 text-2xl font-semibold text-white">{editingId ? "Edit Crew" : "Tambah Crew"}</h2></div>
           <button className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300" onClick={handleReset} type="button">Reset</button>
@@ -158,9 +206,12 @@ export default function UserManagementTable({ currentHour, records }: UserManage
           <label className="block text-sm text-slate-300">
             NAME
             <input 
-              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" 
+              className={getInputClass('name')} 
               name="name" 
-              onChange={(event) => setFormValues((current) => ({ ...current, name: event.target.value }))} 
+              onChange={(event) => {
+                setFormValues((current) => ({ ...current, name: event.target.value }));
+                if (localErrors.name) setLocalErrors(prev => ({ ...prev, name: '' }));
+              }} 
               value={formValues.name} 
             />
             <FieldError message={state.fieldErrors?.name?.[0]} />
@@ -170,9 +221,12 @@ export default function UserManagementTable({ currentHour, records }: UserManage
           <label className="block text-sm text-slate-300">
             JOB TITLE
             <select 
-              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" 
+              className={getInputClass('jobTitle')} 
               name="jobTitle" 
-              onChange={(event) => setFormValues((current) => ({ ...current, jobTitle: event.target.value }))} 
+              onChange={(event) => {
+                setFormValues((current) => ({ ...current, jobTitle: event.target.value }));
+                if (localErrors.jobTitle) setLocalErrors(prev => ({ ...prev, jobTitle: '' }));
+              }} 
               value={formValues.jobTitle}
             >
               <option value="">Pilih Jenis Pekerjaan...</option>
@@ -187,26 +241,42 @@ export default function UserManagementTable({ currentHour, records }: UserManage
           <label className="block text-sm text-slate-300">
             ASSIGNED VESSEL
             <select 
-              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" 
+              className={getInputClass('assignedVessel')} 
               name="assignedVessel" 
-              onChange={(event) => setFormValues((current) => ({ ...current, assignedVessel: event.target.value }))} 
+              onChange={(event) => {
+                setFormValues((current) => ({ ...current, assignedVessel: event.target.value }));
+                if (localErrors.assignedVessel) setLocalErrors(prev => ({ ...prev, assignedVessel: '' }));
+              }} 
               value={formValues.assignedVessel}
             >
               <option value="">Unassigned (Belum Ditugaskan)</option>
-              {VESSELS.map((vessel) => (
-                <option key={vessel.id} value={vessel.id}>{vessel.name}</option>
+              {vesselsList.map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
               ))}
             </select>
             <FieldError message={state.fieldErrors?.assignedVessel?.[0]} />
           </label>
 
           {/* WORK SHIFT */}
-          <label className="block text-sm text-slate-300">WORK SHIFT<select className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" name="workShift" onChange={(event) => setFormValues((current) => ({ ...current, workShift: event.target.value }))} value={formValues.workShift}>{["MORNING", "SWING", "NIGHT"].map((shift) => (<option key={shift} value={shift}>{shift}</option>))}</select></label>
+          <label className="block text-sm text-slate-300">
+            WORK SHIFT
+            <select 
+              className={getInputClass('workShift')} 
+              name="workShift" 
+              onChange={(event) => {
+                setFormValues((current) => ({ ...current, workShift: event.target.value }));
+                if (localErrors.workShift) setLocalErrors(prev => ({ ...prev, workShift: '' }));
+              }} 
+              value={formValues.workShift}
+            >
+              {["MORNING", "SWING", "NIGHT"].map((shift) => (<option key={shift} value={shift}>{shift}</option>))}
+            </select>
+          </label>
           
           {/* WORK HOURS */}
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm text-slate-300">START HOUR<input className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" max="23" min="0" name="startHour" onChange={(event) => setFormValues((current) => ({ ...current, startHour: event.target.value }))} type="number" value={formValues.startHour} /><FieldError message={state.fieldErrors?.startHour?.[0]} /></label>
-            <label className="block text-sm text-slate-300">END HOUR<input className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-cyan-400/60" max="23" min="0" name="endHour" onChange={(event) => setFormValues((current) => ({ ...current, endHour: event.target.value }))} type="number" value={formValues.endHour} /><FieldError message={state.fieldErrors?.endHour?.[0]} /></label>
+            <label className="block text-sm text-slate-300">START HOUR<input className={getInputClass('startHour')} max="23" min="0" name="startHour" onChange={(event) => { setFormValues((current) => ({ ...current, startHour: event.target.value })); if (localErrors.startHour) setLocalErrors(prev => ({ ...prev, startHour: '' })); }} type="number" value={formValues.startHour} /><FieldError message={state.fieldErrors?.startHour?.[0]} /></label>
+            <label className="block text-sm text-slate-300">END HOUR<input className={getInputClass('endHour')} max="23" min="0" name="endHour" onChange={(event) => { setFormValues((current) => ({ ...current, endHour: event.target.value })); if (localErrors.endHour) setLocalErrors(prev => ({ ...prev, endHour: '' })); }} type="number" value={formValues.endHour} /><FieldError message={state.fieldErrors?.endHour?.[0]} /></label>
           </div>
           
           <SubmitButton editing={Boolean(editingId)} />

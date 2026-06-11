@@ -52,10 +52,11 @@ export async function fetchVesselData(): Promise<VesselData[]> {
         f.destination AS dest,
         f.status_color AS "statusColor",
         f.monitoring_icon AS mon,
+        f.progress_pct,
         r.jalur_koordinat
       FROM fleet_vessels f
-      LEFT JOIN vessel_routes r ON f.id = r.vessel_id
-      ORDER BY f.id, r.nomor_rute DESC;
+      LEFT JOIN vessel_routes r ON f.route_id = r.id
+      ORDER BY f.id;
     `;
     return data;
   } catch (error) {
@@ -91,4 +92,22 @@ export async function fetchFilteredInvoices(
   _currentPage: number,
 ): Promise<InvoicesTable[]> {
   return [];
+}
+
+export async function fetchFleetVessels() {
+  const sql = getSql();
+  try {
+    const rows = await sql`
+      SELECT id
+      FROM fleet_vessels
+      ORDER BY id ASC
+    `;
+    return rows.map((row: any) => ({
+      name: row.id || "",
+      code: row.id || "",
+    }));
+  } catch (error) {
+    console.error("fetchFleetVessels error:", error);
+    return [];
+  }
 }

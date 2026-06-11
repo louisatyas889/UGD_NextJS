@@ -42,8 +42,10 @@ export async function saveVesselMaintenance(formData: FormData) {
 
     // 4. Refresh halaman agar status kapal di Fleet Page langsung berubah
     revalidatePath("/fleet");
+    revalidatePath("/admin/user-management");
+    revalidatePath("/admin/cargo-management");
     revalidatePath("/maintenance_vessels");
-    // Refresh layout agar MaintenanceContext (Client) ikut re-fetch di polling berikutnya
+    // Refresh layout agar MaintenanceContext (Client) & Navigation ikut re-fetch
     revalidatePath("/", "layout");
 
     return { success: true };
@@ -114,6 +116,8 @@ export async function completeVesselMaintenance(vesselId: string, newStatus: str
     // Revalidate path agar data di Fleet page & layout (MaintenanceContext polling) ikut ter-update
     revalidatePath("/fleet");
     revalidatePath("/map");
+    revalidatePath("/admin/user-management");
+    revalidatePath("/admin/cargo-management");
     revalidatePath("/maintenance_vessels");
     revalidatePath("/", "layout");
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent, useEffect } from "react";
+import { useState, type FormEvent, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   shipmentStatusOptions,
@@ -9,20 +9,20 @@ import {
 } from "@/app/lib/cargo-types";
 import DataSearchInput from "@/app/ui/data-search-input";
 
-// ==========================================
-// DATA ARMADA KAPAL (SINKRONISASI FLEET VESSELS)
-// ==========================================
+// FALLBACK JIKA DB BENAR-BENAR KOSONG
 const AVAILABLE_VESSELS = [
-  { name: "KM Merkurius", code: "PL-0909-MERKURIUS" },
-  { name: "KM Bulan", code: "PL-123-BULAN" },
-  { name: "KM Nana", code: "PL-230-NANA" },
-  { name: "KM Nars", code: "PL-234-NARS" },
-  { name: "KM Mars", code: "PL-245-MARS" },
+  { name: "PL-0909-MERKURIUS", code: "PL-0909-MERKURIUS" },
+  { name: "PL-123-BULAN",      code: "PL-123-BULAN" },
+  { name: "PL-123-BUMI",       code: "PL-123-BUMI" },
+  { name: "PL-123-CINTA",      code: "PL-123-CINTA" },
+  { name: "PL-167-CINTA",      code: "PL-167-CINTA" },
+  { name: "PL-230-NANA",       code: "PL-230-NANA" },
+  { name: "PL-234-NARS",       code: "PL-234-NARS" },
+  { name: "PL-2345-ORION",     code: "PL-2345-ORION" },
+  { name: "PL-245-MARS",       code: "PL-245-MARS" },
+  { name: "PL-555-BUMI",       code: "PL-555-BUMI" },
 ];
 
-// ==========================================
-// UTILITY FUNCTIONS
-// ==========================================
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(amount);
 }
@@ -40,12 +40,10 @@ interface WorkspaceProps {
     totalRevenue: number;
   };
   currentQuery: string;
+  vesselsFromDb?: { name: string; code: string }[];
 }
 
-// ==========================================
-// MAIN COMPONENT
-// ==========================================
-export default function CargoManagementWorkspace({ initialRecords, initialSummary, currentQuery }: WorkspaceProps) {
+export default function CargoManagementWorkspace({ initialRecords, initialSummary, currentQuery, vesselsFromDb }: WorkspaceProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState(currentQuery);
   const [records, setRecords] = useState<CargoRecord[]>(initialRecords);
@@ -56,16 +54,29 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
   const [formData, setFormData] = useState<any>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [vesselTouched, setVesselTouched] = useState(false);
+  const [isVesselDropdownOpen, setIsVesselDropdownOpen] = useState(false);
 
-  // Sinkronisasi data real-time jika props dari server berubah (saat searching)
-  if (initialRecords !== records && !isEditOpen) {
-    setRecords(initialRecords);
-  }
+  // ✅ FIXED: useMemo tunggal, bersih, tanpa duplikasi
+  const activeVessels = useMemo(() => {
+    if (!vesselsFromDb || vesselsFromDb.length === 0) {
+      return AVAILABLE_VESSELS;
+    }
+    return vesselsFromDb.map((v) => ({
+      name: v.name || v.code || "Kapal Tanpa Nama",
+      code: v.code || v.name || "CODE-UNKNOWN",
+    }));
+  }, [vesselsFromDb]);
 
-  // 👉 SINKRONISASI DROPDOWN ARMADA OTOMATIS SAAT MODAL DIBUKA
+  // Sinkronisasi records saat prop berubah (live search)
   useEffect(() => {
-    if (isEditOpen && !formData.vehicleCode && AVAILABLE_VESSELS.length > 0) {
-      const defaultVessel = AVAILABLE_VESSELS[0];
+    setRecords(initialRecords);
+  }, [initialRecords]);
+
+  // Auto-isi vessel pertama jika modal dibuka dan belum ada kapal dipilih
+  useEffect(() => {
+    if (isEditOpen && !formData.vehicleCode && activeVessels.length > 0) {
+      const defaultVessel = activeVessels[0];
       setFormData((prev: any) => ({
         ...prev,
         vehicleCode: defaultVessel.code,
@@ -73,9 +84,8 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
         vehicleType: "Kapal Kargo",
       }));
     }
-  }, [isEditOpen, formData.vehicleCode]);
+  }, [isEditOpen, formData.vehicleCode, activeVessels]);
 
-  // Handler sinkronisasi Live Search ke URL browser
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     const params = new URLSearchParams(window.location.search);
@@ -87,21 +97,18 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
     router.push(`?${params.toString()}`);
   };
 
-  // Handler Buka Modal Edit
-  const handleOpenEdit = (record: CargoRecord) => {
+  const handleOpenEdit = (record: any) => {
     setEditingId(record.id);
-
-    // Logika untuk merubah format ISO/Database tanggal ke YYYY-MM-DD agar sinkron dengan input HTML
     const rawDate = record.shippingDate ? new Date(record.shippingDate) : null;
     const formattedShippingDate = rawDate && !isNaN(rawDate.getTime())
       ? `${rawDate.getFullYear()}-${String(rawDate.getMonth() + 1).padStart(2, '0')}-${String(rawDate.getDate()).padStart(2, '0')}`
       : "";
 
     setFormData({
-      shippingDate: formattedShippingDate, // Di sini tanggal disinkronkan otomatis saat tombol diklik
+      shippingDate: formattedShippingDate,
       senderName: record.senderName || "",
       recipientName: record.recipientName || "",
-      phone: record.phone || "",
+      phone: record.phone || "-",
       originCity: record.originCity || "",
       destinationCity: record.destinationCity || "",
       itemName: record.itemName || "",
@@ -113,23 +120,30 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
       description: record.description || "",
       transportMode: record.transportMode || "Laut",
       itemStatus: record.itemStatus || "Siap Kirim",
-      transactionStatus: record.transactionStatus || "Lunas", 
+      transactionStatus: record.transactionStatus || "Lunas",
       vehicleName: record.vehicleName || "",
       vehicleType: record.vehicleType || "Kapal Kargo",
       vehicleCode: record.vehicleCode || "",
-      vehicleCapacityKg: record.vehicleCapacityKg ? record.vehicleCapacityKg.toString() : "",
+      vehicleCapacityKg: record.vehicleCapacityKg ? record.vehicleCapacityKg.toString() : "50000",
       vehicleStatus: record.vehicleStatus || "Siap Jalan",
-      itemPrice: record.itemPrice ? record.itemPrice.toString() : "",
+      itemPrice: record.itemPrice ? record.itemPrice.toString() : "0",
     });
     setFormError("");
+    setVesselTouched(false);
+    setIsVesselDropdownOpen(false);
     setIsEditOpen(true);
   };
 
-  // Handler Submit Form (PUT Update data ke API internal kamu)
   const handleFormSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingId) return;
-    
+
+    if (!formData.vehicleCode) {
+      setVesselTouched(true);
+      setFormError("Gagal memproses alokasi. Harap tentukan armada kapal laut terlebih dahulu.");
+      return;
+    }
+
     setIsSubmitting(true);
     setFormError("");
 
@@ -147,8 +161,7 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
 
       const updatedRecord: CargoRecord = await res.json();
       setRecords((prev) => prev.map((r) => (r.id === editingId ? updatedRecord : r)));
-      
-      // Refresh data server agar Summary Cards ikut ter-update otomatis
+
       router.refresh();
       setIsEditOpen(false);
     } catch (err: any) {
@@ -159,9 +172,8 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
   };
 
   const safeRecords = Array.isArray(records) ? records : [];
-
-  // Definisi Lebar Kolom Grid yang Konsisten & Presisi (Total: ~1220px)
   const gridLayoutClass = "grid grid-cols-[120px_100px_170px_140px_160px_160px_140px_120px_110px] items-center gap-4 px-5 py-4";
+  const isVesselInvalid = !formData.vehicleCode && vesselTouched;
 
   return (
     <div className="space-y-6">
@@ -206,7 +218,7 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
         </div>
       </div>
 
-      {/* Main Data Container dengan Sistem PURE GRID (Kebal Overlap) */}
+      {/* Main Data Container */}
       <div className="rounded-3xl border border-white/5 bg-slate-950/80 shadow-2xl backdrop-blur-md overflow-hidden">
         <div className="overflow-x-auto">
           <div className="min-w-[1220px] text-xs sm:text-sm">
@@ -234,35 +246,29 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
                 safeRecords.map((row) => (
                   <div key={row.id} className={`${gridLayoutClass} hover:bg-white/[0.02] transition-colors whitespace-nowrap`}>
                     
-                    {/* Kolom 1: No. Resi */}
                     <div className="font-bold text-cyan-400 font-mono tracking-wide overflow-hidden text-ellipsis">
                       {row.trackingNumber}
                     </div>
                     
-                    {/* Kolom 2: Tanggal */}
                     <div className="text-slate-300 font-mono">
                       {formatDate(row.shippingDate)}
                     </div>
                     
-                    {/* Kolom 3: Pengirim & Penerima */}
                     <div className="overflow-hidden text-ellipsis">
                       <div className="font-medium text-white truncate">{row.senderName}</div>
                       <div className="text-[11px] text-slate-400 mt-0.5 truncate">Ke: {row.recipientName}</div>
                     </div>
                     
-                    {/* Kolom 4: Rute Negara */}
                     <div className="overflow-hidden text-ellipsis">
                       <div className="text-slate-200 truncate">{row.originCity || "-"}</div>
                       <div className="text-[11px] text-slate-500 mt-0.5 truncate">➔ {row.destinationCity || "-"}</div>
                     </div>
                     
-                    {/* Kolom 5: Detail Barang */}
                     <div className="overflow-hidden text-ellipsis">
                       <div className="text-white font-medium truncate">{row.itemName}</div>
                       <div className="text-[11px] text-slate-400 mt-0.5 truncate">{row.itemType} • {row.itemWeightKg} Kg</div>
                     </div>
                     
-                    {/* Kolom 6: Armada Kapal */}
                     <div className="overflow-hidden text-ellipsis">
                       {row.vehicleName ? (
                         <div>
@@ -276,7 +282,6 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
                       )}
                     </div>
                     
-                    {/* Kolom 7: Status Pengiriman */}
                     <div>
                       <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
                         row.shipmentStatus === "Selesai" || row.shipmentStatus === "Sampai Tujuan" 
@@ -285,12 +290,10 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
                       }`}>{row.shipmentStatus}</span>
                     </div>
                     
-                    {/* Kolom 8: Tarif */}
                     <div className="font-semibold text-slate-200 font-mono">
                       {formatCurrency(row.shippingPrice)}
                     </div>
                     
-                    {/* Kolom 9: Tombol Aksi */}
                     <div className="text-center">
                       <button onClick={() => handleOpenEdit(row)} className="w-full px-2 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md shadow-cyan-950/20">
                         {row.vehicleName ? "Re-alokasi" : "Sortir Kapal"}
@@ -315,89 +318,141 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
                 <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-cyan-400 font-semibold">Otoritas Otorisasi</span>
                 <h3 className="text-lg font-bold text-white mt-1 font-mono tracking-wide">VALIDASI MANIFES & ALOKASI</h3>
               </div>
-              <button onClick={() => setIsEditOpen(false)} className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors text-xl">&times;</button>
+              <button type="button" onClick={() => setIsEditOpen(false)} className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors text-xl">&times;</button>
             </div>
 
-            {formError && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-mono">{formError}</div>}
+            {formError && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-xs font-mono flex items-center gap-2">
+                <span>⚠️ Error:</span> {formError}
+              </div>
+            )}
 
             <form onSubmit={handleFormSubmit} className="space-y-5 text-xs sm:text-sm">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 
-                {/* Bagian Kiri: Informasi Pengiriman Klien */}
-                <div className="space-y-4 bg-white/[0.01] p-4 border border-white/5 rounded-2xl">
-                  <h4 className="text-[10px] font-mono text-slate-400 font-bold tracking-wider uppercase border-b border-white/5 pb-1.5">DATA DEKLARASI KLIEN</h4>
+                {/* Informasi Pengiriman Klien (🔒 DIKUNCI) */}
+                <div className="space-y-4 bg-white/[0.01] p-4 border border-white/5 rounded-2xl opacity-60">
+                  <h4 className="text-[10px] font-mono text-slate-400 font-bold tracking-wider uppercase border-b border-white/5 pb-1.5">DATA DEKLARASI KLIEN [🔒 TERKUNCI]</h4>
                   <div>
                     <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">TANGGAL KIRIM</label>
-                    <input type="date" value={formData.shippingDate} onChange={(e) => setFormData({ ...formData, shippingDate: e.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-white outline-none focus:border-cyan-400 transition-all" required />
+                    <input type="date" value={formData.shippingDate} className="w-full rounded-xl border border-white/5 bg-slate-900/50 px-3.5 py-2 text-slate-400 outline-none cursor-not-allowed" readOnly />
                   </div>
                   <div>
                     <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">NAMA PENGIRIM</label>
-                    <input type="text" value={formData.senderName} onChange={(e) => setFormData({ ...formData, senderName: e.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-white outline-none focus:border-cyan-400 transition-all" required />
+                    <input type="text" value={formData.senderName} className="w-full rounded-xl border border-white/5 bg-slate-900/50 px-3.5 py-2 text-slate-400 outline-none cursor-not-allowed" readOnly />
                   </div>
                   <div>
                     <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">NAMA PENERIMA</label>
-                    <input type="text" value={formData.recipientName} onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-white outline-none focus:border-cyan-400 transition-all" required />
+                    <input type="text" value={formData.recipientName} className="w-full rounded-xl border border-white/5 bg-slate-900/50 px-3.5 py-2 text-slate-400 outline-none cursor-not-allowed" readOnly />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">NEGARA ASAL</label>
-                      <input type="text" value={formData.originCity} onChange={(e) => setFormData({ ...formData, originCity: e.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-white outline-none focus:border-cyan-400 transition-all" required />
+                      <input type="text" value={formData.originCity} className="w-full rounded-xl border border-white/5 bg-slate-900/50 px-3.5 py-2 text-slate-400 outline-none cursor-not-allowed" readOnly />
                     </div>
                     <div>
                       <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">NEGARA TUJUAN</label>
-                      <input type="text" value={formData.destinationCity} onChange={(e) => setFormData({ ...formData, destinationCity: e.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-white outline-none focus:border-cyan-400 transition-all" required />
+                      <input type="text" value={formData.destinationCity} className="w-full rounded-xl border border-white/5 bg-slate-900/50 px-3.5 py-2 text-slate-400 outline-none cursor-not-allowed" readOnly />
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="col-span-2">
                       <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">NAMA BARANG</label>
-                      <input type="text" value={formData.itemName} onChange={(e) => setFormData({ ...formData, itemName: e.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-white outline-none focus:border-cyan-400 transition-all" required />
+                      <input type="text" value={formData.itemName} className="w-full rounded-xl border border-white/5 bg-slate-900/50 px-3.5 py-2 text-slate-400 outline-none cursor-not-allowed" readOnly />
                     </div>
                     <div>
                       <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">BERAT (KG)</label>
-                      <input type="number" step="any" value={formData.itemWeightKg || ""} onChange={(e) => setFormData({ ...formData, itemWeightKg: e.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-white outline-none focus:border-cyan-400 transition-all" required />
+                      <input type="text" value={formData.itemWeightKg || ""} className="w-full rounded-xl border border-white/5 bg-slate-900/50 px-3.5 py-2 text-slate-400 outline-none cursor-not-allowed" readOnly />
                     </div>
                   </div>
                 </div>
 
-                {/* Bagian Kanan: Logistik & Alokasi Armada */}
+                {/* Logistik & Alokasi Armada (🛠️ DAPAT DIEDIT) */}
                 <div className="space-y-4 bg-cyan-500/[0.02] p-4 border border-cyan-500/20 rounded-2xl">
                   <h4 className="text-[10px] font-mono text-cyan-400 font-bold tracking-wider uppercase border-b border-cyan-500/20 pb-1.5">KONTROL DISPATCH & DISPENSASI</h4>
                   
-                  {/* Pilihan armada kapal */}
-                  <div className="p-3 bg-slate-900 border border-cyan-500/30 rounded-xl space-y-3">
+                  {/* Pilihan armada kapal — Custom Dropdown */}
+                  <div className={`p-3 bg-slate-900 border rounded-xl space-y-3 transition-all ${isVesselInvalid ? 'border-red-500 bg-red-500/5' : 'border-cyan-500/30'}`}>
                     <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[10px] font-mono uppercase tracking-wider text-cyan-300 mb-1">NAMA KAPAL LAUT</label>
-                        <select 
-                          value={formData.vehicleCode || ""} 
-                          onChange={(e) => {
-                            const code = e.target.value;
-                            const selectedVessel = AVAILABLE_VESSELS.find(v => v.code === code);
-                            setFormData({
-                              ...formData,
-                              vehicleCode: code,
-                              vehicleName: selectedVessel ? selectedVessel.name : "",
-                              vehicleType: code ? "Kapal Kargo" : "",
-                            });
-                          }} 
-                          className="w-full rounded-xl border border-cyan-500/30 bg-slate-950 px-2 py-2 text-white outline-none cursor-pointer focus:border-cyan-400 transition-all text-xs"
-                          required
+                      {/* Tombol trigger custom dropdown */}
+                      <div className="relative">
+                        <label className={`block text-[10px] font-mono uppercase tracking-wider mb-1 ${isVesselInvalid ? 'text-red-400 font-bold' : 'text-cyan-300'}`}>
+                          NAMA KAPAL LAUT
+                        </label>
+                        <button
+                          type="button"
+                          onBlur={() => { setVesselTouched(true); }}
+                          onClick={() => setIsVesselDropdownOpen(prev => !prev)}
+                          className={`w-full rounded-xl px-2 py-2 text-left text-xs flex items-center justify-between transition-all border cursor-pointer
+                            ${isVesselInvalid
+                              ? 'bg-red-950/30 border-red-500 text-red-300'
+                              : 'bg-slate-950 border-cyan-500/30 text-white hover:border-cyan-400'
+                            }`}
                         >
-                          <option value="">-- Pilih Kapal --</option>
-                          {AVAILABLE_VESSELS.map((v) => (
-                            <option key={v.code} value={v.code}>{v.name}</option>
-                          ))}
-                        </select>
+                          <span className={formData.vehicleCode ? "text-white" : "text-slate-500"}>
+                            {formData.vehicleCode || "-- Pilih Kapal --"}
+                          </span>
+                          <svg
+                            className={`w-3 h-3 text-slate-400 transition-transform ${isVesselDropdownOpen ? 'rotate-180' : ''}`}
+                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+
+                        {/* Panel dropdown custom */}
+                        {isVesselDropdownOpen && (
+                          <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-900 border border-cyan-500/30 rounded-xl shadow-2xl shadow-slate-950/80 overflow-hidden">
+                            {/* Option: pilih kosong */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormData({ ...formData, vehicleCode: "", vehicleName: "", vehicleType: "" });
+                                setIsVesselDropdownOpen(false);
+                              }}
+                              className="w-full text-left px-3 py-2 text-xs text-slate-500 hover:bg-white/5 transition-colors font-mono border-b border-white/5"
+                            >
+                              -- Pilih Kapal --
+                            </button>
+                            {/* List semua kapal */}
+                            <div className="max-h-52 overflow-y-auto">
+                              {activeVessels.map((v, idx) => (
+                                <button
+                                  key={v.code || idx}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData({
+                                      ...formData,
+                                      vehicleCode: v.code,
+                                      vehicleName: v.name,
+                                      vehicleType: "Kapal Kargo",
+                                    });
+                                    setIsVesselDropdownOpen(false);
+                                    setFormError("");
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-xs font-mono transition-colors
+                                    ${formData.vehicleCode === v.code
+                                      ? 'bg-cyan-500/20 text-cyan-300 font-bold'
+                                      : 'text-slate-200 hover:bg-white/5'
+                                    }`}
+                                >
+                                  {v.name}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
+
+                      {/* Registrasi kapal (readonly) */}
                       <div>
                         <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1">REGISTRASI KAPAL</label>
-                        <input 
-                          type="text" 
-                          value={formData.vehicleCode || ""} 
-                          className="w-full rounded-xl border border-white/5 bg-white/[0.02] px-2 py-2 text-slate-400 font-mono outline-none text-xs"
-                          placeholder="Otomatis" 
-                          readOnly 
+                        <input
+                          type="text"
+                          value={formData.vehicleCode || ""}
+                          className="w-full rounded-xl border border-white/5 bg-white/[0.02] px-2 py-2 text-slate-400 font-mono outline-none text-xs cursor-not-allowed"
+                          placeholder="Otomatis"
+                          readOnly
                         />
                       </div>
                     </div>
@@ -405,13 +460,13 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
 
                   <div>
                     <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">STATUS OPERASIONAL PENGIRIMAN</label>
-                    <select value={formData.shipmentStatus || ""} onChange={(e) => setFormData({ ...formData, shipmentStatus: e.target.value as any })} className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-white cursor-pointer outline-none focus:border-cyan-400 transition-all">
+                    <select value={formData.shipmentStatus || ""} onChange={(e) => setFormData({ ...formData, shipmentStatus: e.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-white cursor-pointer outline-none focus:border-cyan-400 transition-all">
                       {shipmentStatusOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">STATUS AUDIT TRANSAKSI</label>
-                    <select value={formData.transactionStatus || ""} onChange={(e) => setFormData({ ...formData, transactionStatus: e.target.value as any })} className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-white cursor-pointer outline-none focus:border-cyan-400 transition-all">
+                    <select value={formData.transactionStatus || ""} onChange={(e) => setFormData({ ...formData, transactionStatus: e.target.value })} className="w-full rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2 text-white cursor-pointer outline-none focus:border-cyan-400 transition-all">
                       {transactionStatusOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </div>
@@ -433,7 +488,7 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
               {/* Tombol Aksi Akhir */}
               <div className="flex justify-end gap-3 border-t border-white/10 pt-4 mt-2">
                 <button type="button" onClick={() => setIsEditOpen(false)} className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-colors font-semibold text-xs">Batal</button>
-                <button type="submit" disabled={isSubmitting} className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold rounded-xl hover:opacity-90 disabled:opacity-40 transition-all text-xs shadow-lg shadow-cyan-500/10">
+                <button type="submit" disabled={isSubmitting} className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold rounded-xl hover:opacity-90 disabled:opacity-40 transition-all text-xs shadow-lg">
                   {isSubmitting ? "Menyimpan Alokasi..." : "Konfirmasi & Alokasikan Kapal"}
                 </button>
               </div>
@@ -444,3 +499,4 @@ export default function CargoManagementWorkspace({ initialRecords, initialSummar
     </div>
   );
 }
+

@@ -62,18 +62,13 @@ export const telemetry = {
 export const sizes = ["SMALL", "MEDIUM", "LARGE"];
 
 export const vessels4 = [
-  { id: "V-902 STELLAR", sub: "XJ-902-25", dest: "Reykjavik, ISL", status: "IN TRANSIT", pct: 78 },
-  { id: "V-902 AQUILA", sub: "XJ-902-66", dest: "Reykjavik, ISL", status: "IN TRANSIT", pct: 65 },
-  { id: "V-441 BULAN", sub: "XJ-441-MOON", dest: "Singapore, SGP", status: "DELAYED", pct: 45 },
-  { id: "V-771 ORION", sub: "XJ-771-86", dest: "Rotterdam, NLD", status: "APPROACHING", pct: 96 },
-  { id: "V-105 MARS", sub: "XJ-105-X", dest: "Dubai, ARE", status: "LOADING", pct: 12 },
-  { id: "V-992 BUMI", sub: "PL-992-B", dest: "Tokyo, JPN", status: "STORM", pct: 60 },
-  { id: "V-202 VENUS", sub: "XJ-202-01", dest: "Oslo, NOR", status: "IN TRANSIT", pct: 33 },
-  { id: "V-303 SATURN", sub: "XJ-303-99", dest: "Sydney, AUS", status: "DEPARTING", pct: 5 },
-  { id: "V-412 NEPTUNE", sub: "XJ-412-31", dest: "Singapore, SGP", status: "IN TRANSIT", pct: 42 },
-  { id: "V-118 TITAN", sub: "XJ-118-24", dest: "Dubai, ARE", status: "DEPARTURE PHASE", pct: 16 },
-  { id: "V-551 PLUTO", sub: "XJ-551-07", dest: "Cape Town, ZAF", status: "IN TRANSIT", pct: 88 },
-  { id: "V-882 JUPITER", sub: "XJ-882-12", dest: "Shanghai, CHN", status: "IN TRANSIT", pct: 50 }
+  { id: "PL-0909-MERKURIUS", sub: "KM Merkurius", dest: "Singapura", status: "EN ROUTE", pct: 78 },
+  { id: "PL-123-BULAN", sub: "KM Bulan", dest: "Malaysia", status: "IN PORT", pct: 45 },
+  { id: "PL-230-NANA", sub: "KM Nana", dest: "Thailand", status: "EN ROUTE", pct: 65 },
+  { id: "PL-234-NARS", sub: "KM Nars", dest: "Filipina", status: "DELAYED", pct: 30 },
+  { id: "PL-245-MARS", sub: "KM Mars", dest: "China", status: "MAINTENANCE", pct: 12 },
+  { id: "PL-901-JUPITER", sub: "KM Jupiter", dest: "Jepang", status: "EN ROUTE", pct: 82 },
+  { id: "PL-808-SATURNUS", sub: "KM Saturnus", dest: "Korea Selatan", status: "HOME PORT", pct: 0 }
 ];
 
 export const packages = [
@@ -98,7 +93,7 @@ export const fleetPersonnel = [
     startHour: 6,
     endHour: 14,
     workingHours: "06:00 - 14:00",
-    assignedVessel: "V-902 AQUILA"
+    assignedVessel: "PL-0909-MERKURIUS"
   },
   {
     id: "SS-042",
@@ -106,9 +101,9 @@ export const fleetPersonnel = [
     workShift: "NIGHT",
     jobTitle: "Chief Engineer",
     startHour: 22,
-    endHour: 6, // Selesai pagi hari
+    endHour: 6,
     workingHours: "22:00 - 06:00",
-    assignedVessel: "V-902 AQUILA"
+    assignedVessel: "PL-123-BULAN"
   },
   {
     id: "SS-109",
@@ -118,7 +113,7 @@ export const fleetPersonnel = [
     startHour: 14,
     endHour: 22,
     workingHours: "14:00 - 22:00",
-    assignedVessel: "V-902 AQUILA"
+    assignedVessel: "PL-230-NANA"
   },
   {
     id: "SS-114",
@@ -128,7 +123,7 @@ export const fleetPersonnel = [
     startHour: 7,
     endHour: 15,
     workingHours: "07:00 - 15:00",
-    assignedVessel: "V-992 BUMI"
+    assignedVessel: "PL-234-NARS"
   },
   {
     id: "SS-127",
@@ -138,7 +133,7 @@ export const fleetPersonnel = [
     startHour: 13,
     endHour: 21,
     workingHours: "13:00 - 21:00",
-    assignedVessel: "V-771 ORION"
+    assignedVessel: "PL-245-MARS"
   },
   {
     id: "SS-132",
@@ -148,7 +143,7 @@ export const fleetPersonnel = [
     startHour: 21,
     endHour: 5,
     workingHours: "21:00 - 05:00",
-    assignedVessel: "V-441 BULAN"
+    assignedVessel: "PL-901-JUPITER"
   },
   {
     id: "SS-149",
@@ -158,27 +153,7 @@ export const fleetPersonnel = [
     startHour: 5,
     endHour: 13,
     workingHours: "05:00 - 13:00",
-    assignedVessel: "V-105 MARS"
-  },
-  {
-    id: "SS-156",
-    name: "Nadia Petrov",
-    workShift: "SWING",
-    jobTitle: "Medical Officer",
-    startHour: 12,
-    endHour: 20,
-    workingHours: "12:00 - 20:00",
-    assignedVessel: "V-118 TITAN"
-  },
-  {
-    id: "SS-173",
-    name: "Thomas Blake",
-    workShift: "NIGHT",
-    jobTitle: "Communications Officer",
-    startHour: 20,
-    endHour: 4,
-    workingHours: "20:00 - 04:00",
-    assignedVessel: "V-551 PLUTO"
+    assignedVessel: "PL-808-SATURNUS"
   }
 ];
 
@@ -189,8 +164,8 @@ export const revenue = [];
 
 // Tambahkan koordinat ke data packages yang sudah ada
 export const TrakingPackages = [
-  { id: "PKG-100293", size: "MEDIUM", dest: "Japan (HND)", lat: 35.6762, lng: 139.6503, vesselName: "V-992 BUMI" },
-  { id: "PKG-100412", size: "MEDIUM", dest: "Germany (FRA)", lat: 50.1109, lng: 8.6821, vesselName: "V-771 ORION" },
-  { id: "PKG-200112", size: "SMALL", dest: "Korea (ICN)", lat: 37.5665, lng: 126.9780, vesselName: "V-441 BULAN" },
-  { id: "PKG-300441", size: "LARGE", dest: "Australia (SYD)", lat: -33.8688, lng: 151.2093, vesselName: "V-303 SATURN" },
+  { id: "PKG-100293", size: "MEDIUM", dest: "Japan (HND)", lat: 35.6762, lng: 139.6503, vesselName: "PL-901-JUPITER" },
+  { id: "PKG-100412", size: "MEDIUM", dest: "Germany (FRA)", lat: 50.1109, lng: 8.6821, vesselName: "PL-230-NANA" },
+  { id: "PKG-200112", size: "SMALL", dest: "Korea (ICN)", lat: 37.5665, lng: 126.9780, vesselName: "PL-808-SATURNUS" },
+  { id: "PKG-300441", size: "LARGE", dest: "Australia (SYD)", lat: -33.8688, lng: 151.2093, vesselName: "PL-123-BULAN" },
 ];

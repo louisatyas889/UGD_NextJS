@@ -87,6 +87,11 @@ export async function ensureUserSchema() {
       role VARCHAR(50) NOT NULL DEFAULT 'STANDARD',
       status VARCHAR(20) NOT NULL DEFAULT 'Active',
       avatar VARCHAR(5) NOT NULL DEFAULT 'U',
+      job_title VARCHAR(100),
+      assigned_vessel VARCHAR(100),
+      work_shift VARCHAR(20),
+      start_hour INTEGER,
+      end_hour INTEGER,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -98,6 +103,11 @@ export async function ensureUserSchema() {
     ADD COLUMN IF NOT EXISTS role VARCHAR(50) NOT NULL DEFAULT 'STANDARD',
     ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'Active',
     ADD COLUMN IF NOT EXISTS avatar VARCHAR(5) NOT NULL DEFAULT 'U',
+    ADD COLUMN IF NOT EXISTS job_title VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS assigned_vessel VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS work_shift VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS start_hour INTEGER,
+    ADD COLUMN IF NOT EXISTS end_hour INTEGER,
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ,

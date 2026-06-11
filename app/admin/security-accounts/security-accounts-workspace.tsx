@@ -78,6 +78,20 @@ export default function SecurityAccountsWorkspace({ logs, users }: Props) {
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState("");
 
+  // Hydration fix & UI State
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Modal Delete User
+  const [userToDelete, setUserToDelete] = useState<SecurityUserRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Modal Delete Log
+  const [logToDelete, setLogToDelete] = useState<SecurityLogRecord | null>(null);
+  const [isDeletingLog, setIsDeletingLog] = useState(false);
+
   // Fetch ulang logs+users berkala
   const fetchLive = useCallback(async () => {
     try {
@@ -115,9 +129,10 @@ export default function SecurityAccountsWorkspace({ logs, users }: Props) {
     );
   }, [query, liveLogs]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / 8));
+  const itemsPerPage = 7;
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / itemsPerPage));
   const safePage = Math.min(currentPage, totalPages);
-  const visibleLogs = filteredLogs.slice((safePage - 1) * 8, (safePage - 1) * 8 + 8);
+  const visibleLogs = filteredLogs.slice((safePage - 1) * itemsPerPage, (safePage - 1) * itemsPerPage + itemsPerPage);
 
   // Filter users
   const filteredUsers = useMemo(() => {
@@ -128,22 +143,28 @@ export default function SecurityAccountsWorkspace({ logs, users }: Props) {
     );
   }, [query, enrichedUsers]);
 
-  async function handleDeleteLog(id: number) {
-    if (!window.confirm(`Hapus log #${id}?`)) return;
+  async function handleExecuteDeleteLog() {
+    if (!logToDelete) return;
+    setIsDeletingLog(true);
     startTransition(async () => {
-      const result = await deleteSecurityLogAction(id);
+      const result = await deleteSecurityLogAction(logToDelete.id);
       setFeedback(result.message);
+      setLogToDelete(null);
+      setIsDeletingLog(false);
       if (result.success) {
         await fetchLive();
       }
     });
   }
 
-  async function handleDeleteUser(id: string) {
-    if (!window.confirm(`Hapus account ${id} dari database? Tindakan ini permanen.`)) return;
+  async function handleExecuteDelete() {
+    if (!userToDelete) return;
+    setIsDeleting(true);
     startTransition(async () => {
-      const result = await deleteSecurityUserAction(id);
+      const result = await deleteSecurityUserAction(userToDelete.id);
       setFeedback(result.message);
+      setUserToDelete(null);
+      setIsDeleting(false);
       if (result.success) {
         await fetchLive();
         router.refresh();
@@ -185,40 +206,57 @@ export default function SecurityAccountsWorkspace({ logs, users }: Props) {
   return (
     <>
       {/* === STATS BAR === */}
-      <div className="grid grid-cols-2 gap-3 px-6 pb-4 md:grid-cols-4">
-        <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/[0.04] p-4">
+      <div className="grid grid-cols-2 gap-4 px-6 pb-6 md:grid-cols-4">
+        <div className="rounded-xl border border-cyan-400/30 bg-cyan-500/[0.05] p-4 shadow-[0_0_15px_rgba(34,211,238,0.1)] transition-all hover:shadow-[0_0_20px_rgba(34,211,238,0.2)]">
           <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-slate-500">Total Accounts</p>
-          <p className="mt-2 font-mono text-2xl font-bold text-cyan-300">{totalUsers}</p>
+          <p className="mt-2 font-mono text-2xl font-bold text-cyan-400" style={{ textShadow: "0 0 10px rgba(34,211,238,0.5)" }}>{totalUsers}</p>
         </div>
-        <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/[0.04] p-4">
+        <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/[0.05] p-4 shadow-[0_0_15px_rgba(16,185,129,0.1)] transition-all hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]">
           <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-slate-500">Sedang Online</p>
-          <p className="mt-2 font-mono text-2xl font-bold text-emerald-300 flex items-center gap-2">
+          <p className="mt-2 font-mono text-2xl font-bold text-emerald-400 flex items-center gap-2" style={{ textShadow: "0 0 10px rgba(16,185,129,0.5)" }}>
             {onlineCount}
             <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
           </p>
         </div>
-        <div className="rounded-xl border border-violet-400/20 bg-violet-500/[0.04] p-4">
+        <div className="rounded-xl border border-purple-400/30 bg-purple-500/[0.05] p-4 shadow-[0_0_15px_rgba(168,85,247,0.1)] transition-all hover:shadow-[0_0_20px_rgba(168,85,247,0.2)]">
           <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-slate-500">Total Events</p>
-          <p className="mt-2 font-mono text-2xl font-bold text-violet-300">{liveLogs.length}</p>
+          <p className="mt-2 font-mono text-2xl font-bold text-purple-400" style={{ textShadow: "0 0 10px rgba(168,85,247,0.5)" }}>{liveLogs.length}</p>
         </div>
-        <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.04] p-4">
+        <div className="rounded-xl border border-cyan-400/30 bg-cyan-500/[0.05] p-4 shadow-[0_0_15px_rgba(34,211,238,0.1)] transition-all hover:shadow-[0_0_20px_rgba(34,211,238,0.2)]">
           <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-slate-500">Last Sync</p>
-          <p className="mt-2 font-mono text-xs text-amber-300">{lastSync.toLocaleTimeString("id-ID")}</p>
+          <p className="mt-2 font-mono text-xs text-cyan-400" style={{ textShadow: "0 0 8px rgba(34,211,238,0.4)" }}>
+            {isMounted ? lastSync.toLocaleTimeString("id-ID") : "--:--:--"}
+          </p>
         </div>
       </div>
 
       <div className="layout-sec">
         {/* === KOLOM KIRI: LIVE SECURITY LOGS === */}
-        <div className="panel" style={{ minHeight: "600px", display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div className="panel" style={{ 
+          minHeight: "600px", 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: "16px",
+          background: "rgba(15, 15, 26, 0.7)",
+          border: "1px solid rgba(168, 85, 247, 0.2)",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.5)"
+        }}>
           {feedback ? (
-            <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
+            <div className="rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.1)]">
               {feedback}
             </div>
           ) : null}
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
             <div>
-              <h3 style={{ fontSize: "12px", fontFamily: "Share Tech Mono", color: "#a855f7" }}>
+              <h3 style={{ 
+                fontSize: "14px", 
+                fontFamily: "Orbitron", 
+                fontWeight: "700", 
+                color: "#fff", 
+                letterSpacing: "0.1em",
+                textShadow: "0 0 10px rgba(168, 85, 247, 0.8)"
+              }}>
                 SECURITY EVENT MONITOR
               </h3>
               <p style={{ fontSize: "10px", color: "#6b7280", marginTop: 4 }}>
@@ -253,8 +291,14 @@ export default function SecurityAccountsWorkspace({ logs, users }: Props) {
               visibleLogs.map((log) => (
                 <div
                   key={log.id}
-                  className="log-row"
-                  style={{ display: "grid", gridTemplateColumns: "110px 1fr 150px", alignItems: "start" }}
+                  style={{ 
+                    display: "grid", 
+                    gridTemplateColumns: "110px 1fr 150px", 
+                    alignItems: "start",
+                    padding: "12px 0",
+                    borderBottom: "1px solid rgba(168, 85, 247, 0.1)",
+                    transition: "background 0.2s"
+                  }}
                 >
                   <span style={{ color: log.color, fontFamily: "Share Tech Mono", fontSize: "11px" }}>
                     [{log.time}]
@@ -273,14 +317,23 @@ export default function SecurityAccountsWorkspace({ logs, users }: Props) {
                         borderRadius: "999px",
                         padding: "4px 8px",
                         fontFamily: "Share Tech Mono",
-                        fontSize: "9px",
+                        fontSize: "8px",
+                        textShadow: `0 0 5px ${log.color}`
                       }}
                     >
                       {log.severity}
                     </span>
                     <button
-                      style={{ background: "transparent", border: "1px solid rgba(248,113,113,0.3)", color: "#f87171", padding: "4px 8px", cursor: "pointer" }}
-                      onClick={() => handleDeleteLog(log.id)}
+                      style={{ 
+                        background: "rgba(244, 63, 94, 0.1)", 
+                        border: "1px solid rgba(244, 63, 94, 0.4)", 
+                        color: "#f43f5e", 
+                        padding: "4px 10px", 
+                        cursor: "pointer",
+                        fontSize: "9px",
+                        fontFamily: "Share Tech Mono"
+                      }}
+                      onClick={() => setLogToDelete(log)}
                       type="button"
                     >
                       Del
@@ -308,7 +361,14 @@ export default function SecurityAccountsWorkspace({ logs, users }: Props) {
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           <div className="panel">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-              <h3 style={{ fontSize: "14px", fontFamily: "Share Tech Mono" }}>USER ACCOUNTS</h3>
+              <h3 style={{ 
+                fontSize: "14px", 
+                fontFamily: "Orbitron", 
+                fontWeight: "700", 
+                color: "#a855f7",
+                letterSpacing: "0.05em",
+                textShadow: "0 0 8px rgba(168, 85, 247, 0.3)"
+              }}>USER ACCOUNTS</h3>
               <span style={{ fontSize: "10px", color: "#22d3ee" }}>{filteredUsers.length} of {totalUsers} accounts</span>
             </div>
             <p style={{ fontSize: "10px", color: "#6b7280", marginBottom: 14, lineHeight: 1.5 }}>
@@ -350,7 +410,7 @@ export default function SecurityAccountsWorkspace({ logs, users }: Props) {
                                 background: "rgba(74,222,128,0.15)", border: "1px solid rgba(74,222,128,0.4)", color: "#4ade80",
                                 fontFamily: "Share Tech Mono", letterSpacing: "0.1em",
                                 display: "inline-flex", alignItems: "center", gap: 4,
-                              }}>
+                                boxShadow: "0 0 10px rgba(74,222,128,0.2)" }}>
                                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                 ONLINE
                               </span>
@@ -364,12 +424,12 @@ export default function SecurityAccountsWorkspace({ logs, users }: Props) {
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6, fontFamily: "Share Tech Mono" }}>
-                            {user.id} · {user.status}
+                          <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 6, fontFamily: "Share Tech Mono" }}>
+                            ID: <span className="text-cyan-400">{user.id}</span> · STATUS: {user.status}
                           </div>
                           <div style={{ fontSize: 9, color: "#4b5563", marginTop: 4, fontFamily: "Share Tech Mono", lineHeight: 1.6 }}>
-                            <div>↪ Login: {formatTime(user.lastLoginAt)}</div>
-                            <div>↩ Logout: {formatTime(user.lastLogoutAt)}</div>
+                            <div className="flex justify-between"><span>↪ Last Login:</span> <span className="text-slate-300">{formatTime(user.lastLoginAt)}</span></div>
+                            <div className="flex justify-between"><span>↩ Last Logout:</span> <span className="text-slate-300">{formatTime(user.lastLogoutAt)}</span></div>
                           </div>
                         </div>
                       </div>
@@ -383,7 +443,7 @@ export default function SecurityAccountsWorkspace({ logs, users }: Props) {
                         </button>
                         <button
                           disabled={isPending}
-                          onClick={() => handleDeleteUser(user.id)}
+                          onClick={() => setUserToDelete(user)}
                           style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", border: "1px solid rgba(248,113,113,0.2)", padding: "6px 10px", cursor: "pointer", fontSize: 10, fontFamily: "Share Tech Mono" }}
                           type="button"
                         >
@@ -458,6 +518,120 @@ export default function SecurityAccountsWorkspace({ logs, users }: Props) {
               >
                 {pwLoading ? "MENYIMPAN..." : "✓ KONFIRMASI"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Delete Log Confirmation */}
+      {logToDelete && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          background: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 3000, animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            width: 380, background: '#0f0f1a',
+            border: '1px solid rgba(168, 85, 247, 0.6)', borderRadius: 8,
+            padding: 30, textAlign: 'center', 
+            boxShadow: '0 0 30px rgba(168, 85, 247, 0.25), inset 0 0 20px rgba(168, 85, 247, 0.05)',
+          }}>
+            <h2 style={{ 
+              fontFamily: "'Orbitron', sans-serif", 
+              color: '#fff', 
+              fontSize: 16, 
+              marginBottom: 10, 
+              letterSpacing: '0.15em',
+              textShadow: "0 0 10px rgba(168, 85, 247, 0.8)"
+            }}>
+              ERASE SECURITY LOG
+            </h2>
+            <p style={{ 
+              fontFamily: "'Share Tech Mono', monospace", 
+              color: '#9ca3af', 
+              fontSize: 12, 
+              marginBottom: 30,
+              lineHeight: 1.6
+            }}>
+              Anda akan menghapus log kejadian dari <strong style={{ color: logToDelete.color }}>{logToDelete.actor}</strong>. Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: "center" }}>
+              <button 
+                onClick={() => setLogToDelete(null)}
+                style={{
+                  flex: 1, padding: '10px 20px', borderRadius: 4, border: '1px solid rgba(255, 255, 255, 0.2)',
+                  background: 'transparent', color: '#fff', fontFamily: "'Share Tech Mono', monospace",
+                  fontSize: '11px', letterSpacing: '0.1em', cursor: 'pointer', transition: 'all 0.2s'
+                }}
+              >ABORT</button>
+              <button 
+                onClick={handleExecuteDeleteLog}
+                disabled={isDeletingLog}
+                style={{
+                  flex: 1, padding: '10px 20px', borderRadius: 4, border: 'none',
+                  background: 'linear-gradient(90deg, #9333ea, #a855f7)', color: '#fff', 
+                  fontFamily: "'Share Tech Mono', monospace", fontSize: '11px', letterSpacing: '0.1em',
+                  fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 0 15px rgba(168, 85, 247, 0.5)',
+                }}
+              >{isDeletingLog ? "ERASING..." : "CONFIRM"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Delete Confirmation (Neon Purple Style) */}
+      {userToDelete && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 3000, animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            width: 380, background: '#0f0f1a',
+            border: '1px solid rgba(168, 85, 247, 0.6)', borderRadius: 8,
+            padding: 30, textAlign: 'center', 
+            boxShadow: '0 0 30px rgba(168, 85, 247, 0.25), inset 0 0 20px rgba(168, 85, 247, 0.05)',
+          }}>
+            <h2 style={{ 
+              fontFamily: "'Orbitron', sans-serif", 
+              color: '#fff', 
+              fontSize: 18, 
+              marginBottom: 10, 
+              letterSpacing: '0.15em',
+              textShadow: "0 0 10px rgba(168, 85, 247, 0.8)"
+            }}>
+              DELETE ACCOUNT
+            </h2>
+            <p style={{ 
+              fontFamily: "'Share Tech Mono', monospace", 
+              color: '#9ca3af', 
+              fontSize: 12, 
+              marginBottom: 30,
+              lineHeight: 1.6
+            }}>
+              Apakah Anda yakin ingin menghapus akun <strong style={{ color: '#fff' }}>{userToDelete.name}</strong>? Tindakan ini bersifat permanen.
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: "center" }}>
+              <button 
+                onClick={() => setUserToDelete(null)}
+                style={{
+                  flex: 1, padding: '10px 20px', borderRadius: 4, border: '1px solid rgba(255, 255, 255, 0.2)',
+                  background: 'transparent', color: '#fff', fontFamily: "'Share Tech Mono', monospace",
+                  fontSize: '11px', letterSpacing: '0.1em', cursor: 'pointer', transition: 'all 0.2s'
+                }}
+              >CANCEL</button>
+              <button 
+                onClick={handleExecuteDelete}
+                disabled={isDeleting}
+                style={{
+                  flex: 1, padding: '10px 20px', borderRadius: 4, border: 'none',
+                  background: 'linear-gradient(90deg, #9333ea, #a855f7)', color: '#fff', 
+                  fontFamily: "'Share Tech Mono', monospace", fontSize: '11px', letterSpacing: '0.1em',
+                  fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 0 15px rgba(168, 85, 247, 0.5)',
+                }}
+              >{isDeleting ? "DELETING..." : "CONFIRM"}</button>
             </div>
           </div>
         </div>

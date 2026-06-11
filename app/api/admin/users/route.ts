@@ -22,12 +22,12 @@ export async function GET(request: Request) {
     const rows =
       query.length === 0
         ? await sql`
-            SELECT id, name, role, status, avatar
+            SELECT id, name, role, status, avatar, "key", job_title, assigned_vessel, work_shift, start_hour, end_hour
             FROM app_users
             ORDER BY role ASC, name ASC
           `
         : await sql`
-            SELECT id, name, role, status, avatar
+            SELECT id, name, role, status, avatar, "key", job_title, assigned_vessel, work_shift, start_hour, end_hour
             FROM app_users
             WHERE
               id ILIKE ${keyword} OR
@@ -53,6 +53,12 @@ export async function GET(request: Request) {
         role: String(row.role),
         status: String(row.status),
         avatar: String(row.avatar),
+        key: String(row.key || ''),
+        jobTitle: String(row.job_title || ''),
+        assignedVessel: String(row.assigned_vessel || ''),
+        workShift: String(row.work_shift || ''),
+        startHour: row.start_hour || '',
+        endHour: row.end_hour || '',
       })),
       summary: {
         totalUsers: Number(summaryRows[0]?.total_users ?? 0),
@@ -65,6 +71,161 @@ export async function GET(request: Request) {
     console.error("GET /api/admin/users error", error);
     return NextResponse.json(
       { message: "Gagal mengambil data user dari database." },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const session = await fetchCurrentSession();
+
+    if (!session || !isAdminRole(session.role)) {
+      return NextResponse.json(
+        { message: "Akses admin diperlukan." },
+        { status: 401 },
+      );
+    }
+
+    const body = await request.json();
+    const { id, name, key, role, status, avatar, jobTitle, assignedVessel, workShift, startHour, endHour } = body;
+
+    if (!id || !name || !key) {
+      return NextResponse.json(
+        { message: "ID, name, dan access key harus diisi." },
+        { status: 400 },
+      );
+    }
+
+    await ensureUserSchema();
+    const sql = getSql();
+
+    // Check if user already exists
+    const existing = await sql`SELECT id FROM app_users WHERE id = ${id}`;
+    if (existing.length > 0) {
+      return NextResponse.json(
+        { message: `User dengan ID ${id} sudah ada.` },
+        { status: 400 },
+      );
+    }
+
+    await sql`
+      INSERT INTO app_users (
+        id, name, "key", role, status, avatar, 
+        job_title, assigned_vessel, work_shift, start_hour, end_hour
+      )
+      VALUES (
+        ${id}, ${name}, ${key}, ${role || 'STANDARD'}, ${status || 'Active'}, 
+        ${avatar || name.charAt(0).toUpperCase()}, ${jobTitle}, ${assignedVessel}, 
+        ${workShift || 'MORNING'}, ${startHour ? parseInt(startHour) : null}, 
+        ${endHour ? parseInt(endHour) : null}
+      )
+    `;
+
+    return NextResponse.json({
+      message: "User berhasil ditambahkan.",
+      user: { id, name, role: role || 'STANDARD', status: status || 'Active' }
+    });
+  } catch (error) {
+    console.error("POST /api/admin/users error", error);
+    return NextResponse.json(
+      { message: "Gagal menambahkan user." },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const session = await fetchCurrentSession();
+
+    if (!session || !isAdminRole(session.role)) {
+      return NextResponse.json(
+        { message: "Akses admin diperlukan." },
+        { status: 401 },
+      );
+    }
+
+    const body = await request.json();
+    const { id, name, key, role, status, avatar, jobTitle, assignedVessel, workShift, startHour, endHour } = body;
+
+    if (!id || !name) {
+      return NextResponse.json(
+        { message: "ID dan name harus diisi." },
+        { status: 400 },
+      );
+    }
+
+    await ensureUserSchema();
+    const sql = getSql();
+
+    // Update with or without key
+    if (key) {
+      await sql`
+        UPDATE app_users 
+        SET name = ${name}, "key" = ${key}, role = ${role}, status = ${status}, avatar = ${avatar}, 
+            job_title = ${jobTitle}, assigned_vessel = ${assignedVessel}, work_shift = ${workShift}, 
+            start_hour = ${startHour ? parseInt(startHour) : null}, end_hour = ${endHour ? parseInt(endHour) : null}, 
+            updated_at = NOW()
+        WHERE id = ${id}
+      `;
+    } else {
+      await sql`
+        UPDATE app_users 
+        SET name = ${name}, role = ${role || 'STANDARD'}, status = ${status || 'Active'}, avatar = ${avatar || 'U'},
+            assigned_vessel = ${assignedVessel}, work_shift = ${workShift}, 
+            start_hour = ${startHour ? parseInt(startHour) : null}, 
+            updated_at = NOW()
+        WHERE id = ${id}
+      `;
+    }
+
+    return NextResponse.json({
+      message: "User berhasil diupdate.",
+      user: { id, name, role, status }
+    });
+  } catch (error) {
+    console.error("PUT /api/admin/users error", error);
+    return NextResponse.json(
+      { message: "Gagal mengupdate user." },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const session = await fetchCurrentSession();
+
+    if (!session || !isAdminRole(session.role)) {
+      return NextResponse.json(
+        { message: "Akses admin diperlukan." },
+        { status: 401 },
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { message: "ID user harus diisi." },
+        { status: 400 },
+      );
+    }
+
+    await ensureUserSchema();
+    const sql = getSql();
+
+    await sql`DELETE FROM app_users WHERE id = ${id}`;
+
+    return NextResponse.json({
+      message: "User berhasil dihapus.",
+    });
+  } catch (error) {
+    console.error("DELETE /api/admin/users error", error);
+    return NextResponse.json(
+      { message: "Gagal menghapus user." },
       { status: 500 },
     );
   }

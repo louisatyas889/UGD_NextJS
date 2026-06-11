@@ -1,4 +1,5 @@
 "use client";
+import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 // Import data dummy
 import { dummyAdmins } from "../lib/placeholder-data";
@@ -6,9 +7,17 @@ import { dummyAdmins } from "../lib/placeholder-data";
 export default function SereneSailTopbar() {
   const router = useRouter();
   const path = usePathname();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Simulasi mengambil data admin yang sedang login (misal: Louisa)
   const currentAdmin = dummyAdmins[0]; 
+
+  // Update time setiap detik untuk real-time clock
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Menu FLEET & LOGISTICS telah dihapus dari sini
   const navs = [
@@ -16,6 +25,29 @@ export default function SereneSailTopbar() {
     { label: "USER MANAGEMENT", href: "/admin/user-management" },
     { label: "SECURITY & ACCOUNTS", href: "/admin/security-accounts" },
   ];
+
+  const handleLogout = () => {
+    setShowLogoutModal(false);
+    // Pastikan logout benar-benar redirect. Gunakan router replace agar tidak bisa back.
+    router.replace("/login");
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-GB', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
   return (
     <header style={{
@@ -36,6 +68,8 @@ export default function SereneSailTopbar() {
         }
         .nav-btn.active::after { width: 100%; }
         .logo-text:hover { text-shadow: 0 0 12px #a855f7; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes modalScale { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
       `}</style>
 
       {/* Inner Wrapper: Mengunci komponen agar satu frame (max-width 1400px) dengan konten halaman */}
@@ -99,31 +133,9 @@ export default function SereneSailTopbar() {
             {currentAdmin.role}
           </div>
 
-          {/* Notification Bell */}
-          <div style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            justifyContent: "center", 
-            width: 32, 
-            height: 32, 
-            cursor: "pointer", 
-            color: "#6b7280", 
-            borderRadius: "50%", 
-            transition: "all 0.2s",
-            border: "1px solid rgba(255,255,255,0.05)"
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.color = "#22d3ee"}
-          onMouseLeave={(e) => e.currentTarget.style.color = "#6b7280"}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-          </div>
-
           {/* Logout Button */}
           <div 
-            onClick={() => { if(confirm("TERMINATE ADMIN SESSION?")) router.push("/login"); }}
+            onClick={() => setShowLogoutModal(true)}
             title="Logout"
             style={{ 
               display: "flex", 
@@ -148,22 +160,89 @@ export default function SereneSailTopbar() {
             </svg>
           </div>
 
-          {/* User Profile Avatar */}
-          <div
-            title={`Logged in as ${currentAdmin.name}`}
-            style={{
-              width: 32, height: 32, borderRadius: "50%",
-              background: "linear-gradient(135deg, #a855f7, #6366f1)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "default", overflow: "hidden", border: "2px solid rgba(255,255,255,0.1)",
-              boxShadow: "0 0 10px rgba(168, 85, 247, 0.4)",
-              fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: "bold", color: "#fff"
-            }}
-          >
-            {currentAdmin.avatar}
+          {/* User Profile Avatar - Now Clickable */}
+          <div style={{ position: "relative" }}>
+            <div
+              onClick={() => router.push("/profile")}
+              title={`Profile: ${currentAdmin.name}`}
+              style={{
+                width: 32, height: 32, borderRadius: "50%",
+                background: "linear-gradient(135deg, #a855f7, #6366f1)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", overflow: "hidden", border: "2px solid rgba(255,255,255,0.1)",
+                boxShadow: "0 0 10px rgba(168, 85, 247, 0.4)",
+                fontFamily: "'Orbitron', sans-serif", fontSize: 11, fontWeight: "bold", color: "#fff",
+                transition: "all 0.3s ease",
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.1)"}
+              onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+            >
+              {currentAdmin.avatar}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 3000, animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            width: 360, background: '#0f0f1a',
+            border: '1px solid rgba(168, 85, 247, 0.6)', borderRadius: 8,
+            padding: 30, textAlign: 'center', 
+            boxShadow: '0 0 30px rgba(168, 85, 247, 0.25), inset 0 0 20px rgba(168, 85, 247, 0.05)',
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            <h2 style={{ 
+              fontFamily: "'Orbitron', sans-serif", 
+              color: '#fff', 
+              fontSize: 18, 
+              marginBottom: 10, 
+              letterSpacing: '0.15em',
+              textShadow: "0 0 10px rgba(168, 85, 247, 0.8)"
+            }}>
+              TERMINATE SESSION
+            </h2>
+            <p style={{ 
+              fontFamily: "'Share Tech Mono', monospace", 
+              color: '#9ca3af', 
+              fontSize: 12, 
+              marginBottom: 30 
+            }}>
+              Are you sure you want to log out from the dashboard?
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: "center" }}>
+              <button 
+                onClick={() => setShowLogoutModal(false)}
+                style={{
+                  flex: 1, padding: '10px 20px', borderRadius: 4, border: '1px solid rgba(255, 255, 255, 0.2)',
+                  background: 'transparent', color: '#fff', fontFamily: "'Share Tech Mono', monospace",
+                  fontSize: '11px', letterSpacing: '0.1em', cursor: 'pointer', transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >CANCEL</button>
+              <button 
+                onClick={handleLogout}
+                style={{
+                  flex: 1, padding: '10px 20px', borderRadius: 4, border: 'none',
+                  background: 'linear-gradient(90deg, #9333ea, #a855f7)', color: '#fff', 
+                  fontFamily: "'Share Tech Mono', monospace", fontSize: '11px', letterSpacing: '0.1em',
+                  fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 0 15px rgba(168, 85, 247, 0.5)',
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = "0 0 25px rgba(168, 85, 247, 0.8)"}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = "0 0 15px rgba(168, 85, 247, 0.5)"}
+              >CONFIRM</button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

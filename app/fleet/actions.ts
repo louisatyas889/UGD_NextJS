@@ -57,6 +57,8 @@ export async function createVessel(formData: FormData) {
     `;
     revalidatePath("/fleet");
     revalidatePath("/map");
+    revalidatePath("/admin/user-management");
+    revalidatePath("/admin/cargo-management");
     return { success: true };
   } catch (err) {
     console.error("Error at createVessel:", err);
@@ -110,6 +112,8 @@ export async function updateVessel(formData: FormData) {
     
     revalidatePath("/fleet");
     revalidatePath("/map");
+    revalidatePath("/admin/user-management");
+    revalidatePath("/admin/cargo-management");
     return { success: true };
   } catch (err) {
     console.error("Error at updateVessel:", err);
@@ -125,6 +129,8 @@ export async function deleteVessel(id: string) {
     await getFleetSql()`DELETE FROM fleet_vessels WHERE id = ${id}`;
     revalidatePath("/fleet");
     revalidatePath("/map");
+    revalidatePath("/admin/user-management");
+    revalidatePath("/admin/cargo-management");
     return { success: true };
   } catch (err) {
     console.error("Error at deleteVessel:", err);

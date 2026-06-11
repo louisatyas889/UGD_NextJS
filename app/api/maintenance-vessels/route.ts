@@ -1,41 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSql } from "../../lib/db";
+import { getSql } from "@/app/lib/db"; // Disarankan menggunakan path alias agar aman jika file dipindah
 
-// Endpoint ini digunakan oleh MaintenanceContext (Client) untuk mengambil
-// daftar kapal. Default: hanya kapal MAINTENANCE (untuk megamenu & list aktif).
-// Query param ?scope=all  : kembalikan SEMUA kapal (untuk dropdown inisialisasi form).
+
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   const scope = request.nextUrl.searchParams.get("scope");
 
   try {
     const sql = getSql();
 
+    // Scope 'all': mengembalikan semua kapal untuk dropdown/inisialisasi
     if (scope === "all") {
-      const rows = (await sql`
+      // 2. PERBAIKAN: Menuliskan generic type langsung pada function sql<> agar lebih clean tanpa "as unknown as"
+      const rows = await sql<Array<{ id: string | number; status: string }>>`
         SELECT id, status
         FROM fleet_vessels
         ORDER BY id ASC
-      `) as unknown as Array<{ id: string | number; status: string }>;
+      `;
+      
       const vessels = rows.map((r) => ({
         id: String(r.id),
         status: r.status ?? "UNKNOWN",
       }));
+      
       return NextResponse.json({ success: true, vessels });
     }
 
-    // Default scope: hanya MAINTENANCE
-    const rows = (await sql`
-      SELECT id, destination, status, eta, monitoring_icon
-      FROM fleet_vessels
-      WHERE status = 'MAINTENANCE'
-      ORDER BY id ASC
-    `) as unknown as Array<{
+    // Default scope: hanya kapal dengan status MAINTENANCE
+    // 3. PERBAIKAN: Menggunakan UPPER() untuk mengantisipasi ketidakkonsistenan penulisan huruf di DB (misal: 'Maintenance' atau 'maintenance')
+    const rows = await sql<Array<{
       id: string | number;
       destination: string | null;
       status: string;
       eta: string | null;
       monitoring_icon: string | null;
-    }>;
+    }>>`
+      SELECT id, destination, status, eta, monitoring_icon
+      FROM fleet_vessels
+      WHERE UPPER(status) = 'MAINTENANCE'
+      ORDER BY id ASC
+    `;
 
     const vessels = rows.map((r) => ({
       id: String(r.id),
@@ -49,8 +54,12 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("[/api/maintenance-vessels] Error:", error);
     return NextResponse.json(
-      { success: false, vessels: [], error: error?.message ?? "Database error" },
-      { status: 200 } // tetap 200 agar client tidak crash, list kosong
+      { 
+        success: false, 
+        vessels: [], 
+        error: error?.message ?? "Database error" 
+      },
+      { status: 200 } // Tetap 200 sesuai kebutuhan proteksi komponen client Anda
     );
   }
 }
